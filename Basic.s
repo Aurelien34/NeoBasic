@@ -39,7 +39,7 @@
 
 * $3D04 $37B6 $3784 $3670
 
-	INCLUDE	"Basic68k3.0.inc"
+	INCLUDE	"Basic.inc"
 							* RAM offset definitions
 
 	SECTION	CODE			* vasm: return to a real code section (the
