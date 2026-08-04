@@ -42,10 +42,9 @@
 	INCLUDE	"Basic.inc"
 							* RAM offset definitions
 
-	SECTION	CODE			* vasm: return to a real code section (the
-							* OFFSET block above only defines symbols)
-	ORG		$C00000			* ROM base. hardware mirrors $C00000 at
-							* $000000 on reset so the CPU finds this
+	SECTION	vectors,code		* vasm: return to a real code section (the
+							* OFFSET block above only defines symbols).
+							* linked via Basic.ld into the VECTORS region
 
 * 68000 exception vector table, 256 x 4 bytes = $400. vectors 2-255 default
 * to HW_DEFAULT (safe halt), except 47 (TRAP #15) which goes to HW_TRAP15
@@ -67,9 +66,11 @@ HW_VECTORS
 	dc.l	HW_DEFAULT
 	ENDR
 
-	ORG		$C00400			* real code starts here. if vasm has to move
-							* the pc backward here it errors out - that's
-							* our check that the table above is $400 bytes
+	IFNE	(*-HW_VECTORS)-$400	* the linker script gives VECTORS exactly
+	FAIL	'HW_VECTORS is not exactly $400 bytes'	* $400 bytes - catch a
+	ENDC					* wrong REPT count here, at assemble time
+
+	SECTION	text,code		* linked via Basic.ld into the ROM region
 
 HW_DEFAULT
 	BRA.s		HW_DEFAULT			* unhandled vector: safe halt
