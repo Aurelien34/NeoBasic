@@ -144,7 +144,5 @@ file_id	ds.l	1			* load/save file ID
 
 prg_strt
 
-	ORG	*
-
-ram_top	EQU	$40000		* length in bytes of RAM
+ram_top	EQU	$10000		* length in bytes of RAM (64K)
 

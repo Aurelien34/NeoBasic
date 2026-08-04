@@ -14,10 +14,4 @@
  For more information on EhBASIC68, other versions of EhBASIC and other projects
  please visit my site at ..
 
-	 http://www.themotionstore.com/leeedavison/index.html (add free)
-
- .. or ..
-
-	 http://members.lycos.co.uk/leeedavison/index.html
-
-
+	https://6502.org/users/mycorner/68k/ehbasic/index.html

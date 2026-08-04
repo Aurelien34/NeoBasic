@@ -19,14 +19,15 @@
 *										*
 *************************************************************
 *										*
-*	The choice of memory areas in this code is set to	*
-*	reflect the actual memory present on a 68008 SBC	*
-*	that I have.							*
+*	Memory map for the target hardware (not the EASy68k	*
+*	simulator, not the original author's 68008 SBC):	*
 *										*
-*	Memory map:								*
+*	ROM	from $C00000 (end address not fixed here)	*
+*	RAM	$100000 - $10FFFF (64K)				*
 *										*
-*	ROM	$000000 - $00FFFF						*
-*	RAM	$040000 - $048000 ($050000 optional)		*
+*	Hardware mirrors ROM ($C00000) at $000000 on reset,	*
+*	so the CPU finds its vector table there - see		*
+*	HW_VECTORS below.						*
 *										*
 *************************************************************
 
@@ -38,12 +39,79 @@
 
 * $3D04 $37B6 $3784 $3670
 
-	OPT	CRE
-
 	INCLUDE	"Basic68k3.0.inc"
 							* RAM offset definitions
 
-	ORG		$000400			* past the vectors in a real system
+	SECTION	CODE			* vasm: return to a real code section (the
+							* OFFSET block above only defines symbols)
+	ORG		$C00000			* ROM base. hardware mirrors $C00000 at
+							* $000000 on reset so the CPU finds this
+
+* 68000 exception vector table, 256 x 4 bytes = $400. vectors 2-255 default
+* to HW_DEFAULT (safe halt), except 47 (TRAP #15) which goes to HW_TRAP15
+
+HW_VECTORS
+	dc.l	$00110000			* 0: initial SSP = top of RAM ($100000+$10000)
+	dc.l	HW_RESET			* 1: initial PC = reset entry
+
+	REPT	45				* 2-46: bus/addr err, illegal, div by zero, CHK,
+							* TRAPV, priv viol, trace, line-A/F, reserved,
+							* uninit int, spurious int, autovectors, TRAP #0-14
+	dc.l	HW_DEFAULT
+	ENDR
+
+	dc.l	HW_TRAP15			* 47: TRAP #15 - console/file I/O function calls
+
+	REPT	208				* 48-255: FPU/MMU (unused on 68000), reserved,
+							* user-defined interrupts
+	dc.l	HW_DEFAULT
+	ENDR
+
+	ORG		$C00400			* real code starts here. if vasm has to move
+							* the pc backward here it errors out - that's
+							* our check that the table above is $400 bytes
+
+HW_DEFAULT
+	BRA.s		HW_DEFAULT			* unhandled vector: safe halt
+
+* TRAP #15 handler - dispatches on the function code in d0 (console/file I/O).
+* fn 5, 6, 7 and 12 are stubbed below, fill in the bodies for the real
+* hardware. everything else (fn 50-55, file LOAD/SAVE) isn't implemented yet
+* and falls through to HW_TRAP15_UNKNOWN (safe halt)
+
+HW_TRAP15
+	CMP.b		#5,d0				* get byte (blocking)
+	BEQ.s		HW_TRAP15_GETBYTE
+	CMP.b		#6,d0				* character out
+	BEQ.s		HW_TRAP15_PUTBYTE
+	CMP.b		#7,d0				* get status (char waiting?)
+	BEQ.s		HW_TRAP15_STATUS
+	CMP.b		#12,d0			* keyboard echo on/off
+	BEQ.s		HW_TRAP15_ECHO
+
+HW_TRAP15_UNKNOWN
+	BRA.s		HW_TRAP15_UNKNOWN		* unimplemented trap function: safe halt
+
+* fn 5 - get byte (blocking). return: d1.b = character received
+HW_TRAP15_GETBYTE
+	* TODO: implement
+	RTE
+
+* fn 6 - character out. in: d1.b = character to send
+HW_TRAP15_PUTBYTE
+	* TODO: implement
+	RTE
+
+* fn 7 - get status (non blocking). return: d1.b = 0 if none waiting, <>0 if
+* a character is waiting
+HW_TRAP15_STATUS
+	* TODO: implement
+	RTE
+
+* fn 12 - keyboard echo on/off. in: d1 = 0 (off) / 1 (on)
+HW_TRAP15_ECHO
+	* TODO: implement
+	RTE
 
 * the following code is simulator specific, change to suit your system
 
@@ -314,7 +382,8 @@ code_start
 * BASIC cold start entry point. assume entry with RAM address in a0 and RAM length
 * in d0, for now we fake that with these extra move instructions
 
-	MOVEA.l	#$40000,a0			* tell BASIC where RAM is
+HW_RESET
+	MOVEA.l	#$100000,a0			* tell BASIC where RAM is
 	MOVE.l	#ram_top,d0			* tell BASIC how big RAM is
 
 LAB_COLD
@@ -7787,4 +7856,4 @@ LAB_SMSG
 * RIGHT$	. RIGHT$(<sexpr>,<nexpr>)					* done
 * MID$	. MID$(<sexpr>,<nexpr>[,<nexpr>])				* done
 
-	END	code_start
+	END	HW_RESET
