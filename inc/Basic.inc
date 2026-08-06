@@ -141,12 +141,17 @@ ccnull	ds.b	1			* CTRL-C last received byte 'life' timer
 file_byte	ds.b	1			* load/save data byte
 file_id	ds.l	1			* load/save file ID
 
-;		dc.w	0			* dummy even value and zero pad byte
 keyboard_polling_index ds.b  1 * keyboard polling index. Incremented by the host everytime a key is pressed
 keyboard_polling_index_dummy ds.b  1
 
-CursorX ds.b * Screen cursor column
-CursorY ds.b * Screen cursor row
+CursorX ds.b 1 * Screen cursor column
+CursorY ds.b 1 * Screen cursor row
+CursorBlink_backup ds.w 1 * Backup character behind the cursor
+CursorBlink_counter ds.b 1 * Animation counter
+
+filler ds.b 1 * For parity
+
+		dc.w	0			* dummy even value and zero pad byte
 
 prg_strt
 

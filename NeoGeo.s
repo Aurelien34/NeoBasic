@@ -6,6 +6,7 @@
     global VBLANK, HBLANK
 	global HW_TRAP15_GETBYTE, HW_TRAP15_PUTBYTE, HW_TRAP15_STATUS
 	global fix_layer_cls, fix_locate_cursor_position
+	global BasicNeo_cursor_blink_start, BasicNeo_cursor_blink_loop, BasicNeo_cursor_blink_stop
 
     section header
 	; Magic word - 8 bytes
@@ -50,6 +51,7 @@ SETUP_NEOGEO
 VBLANK
     move.w #4,REG_IRQACK
 	WatchDog
+	addq.b #1,CursorBlink_counter(a3)
 	rte
 
 HBLANK
@@ -308,4 +310,54 @@ fix_locate_cursor_position:
 
 	movem (sp)+,d0-d1
 
+	rts
+
+BasicNeo_cursor_blink_start:
+	; Backup the character behind the cursor
+	move.w REG_VRAMRW,CursorBlink_backup(a3)
+	move.b #0,CursorBlink_counter(a3)
+	rts
+
+BasicNeo_cursor_blink_loop:
+	move d0,-(sp)
+
+	move.b CursorBlink_counter(a3),d0
+	cmp #10,d0
+	blt .b1
+	cmp #20,d0
+	blt .b2
+	move.b #0,CursorBlink_counter(a3)
+	bra .end
+.b1:
+	move #0,d0
+	bra .show
+.b2:
+	move #' ',d0
+.show:
+
+	move.w #0,REG_VRAMMOD
+	nop
+	nop
+	move.w d0,REG_VRAMRW
+	nop
+	nop
+	move.w #$20,REG_VRAMMOD
+
+.end:
+
+	move (sp)+,d0
+	rts
+
+BasicNeo_cursor_blink_stop:
+	move d0,-(sp)
+	
+	move.w #0,REG_VRAMMOD
+	nop
+	nop
+	move.w CursorBlink_backup(a3),REG_VRAMRW
+	nop
+	nop
+	move.w #$20,REG_VRAMMOD
+	
+	move (sp)+,d0
 	rts

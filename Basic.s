@@ -804,10 +804,15 @@ LAB_1357
 	LEA		Ibuffs(a3),a0		* set buffer base pointer
 
 LAB_1359
+	JSR 	BasicNeo_cursor_blink_start
+.cursorLoop:
+	JSR		BasicNeo_cursor_blink_loop
 	JSR		V_INPT(a3)			* call scan input device
-	BCC.s		LAB_1359			* loop if no byte
+	BCC.s	.cursorLoop			* loop if no byte
 
 	BEQ.s		LAB_1359			* loop if null byte
+
+	JSR		BasicNeo_cursor_blink_stop
 
 	CMP.b		#$07,d0			* compare with [BELL]
 	BEQ.s		LAB_1378			* branch if [BELL]
