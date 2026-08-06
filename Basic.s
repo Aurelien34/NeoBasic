@@ -39,7 +39,9 @@
 
 * $3D04 $37B6 $3784 $3670
 
-	INCLUDE	"Basic.inc"
+	INCLUDE	"inc/Basic.inc"
+	INCLUDE	"inc/define.inc"
+	INCLUDE	"inc/trace.inc"
 							* RAM offset definitions
 
 	SECTION	vectors,code		* vasm: return to a real code section (the
@@ -52,28 +54,41 @@
 HW_VECTORS
 	dc.l	$00110000			* 0: initial SSP = top of RAM ($100000+$10000)
 	dc.l	HW_RESET			* 1: initial PC = reset entry
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	TRACE
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	VBLANK
+	dc.l	HBLANK
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0 
+	dc.l	0
 
-	REPT	45				* 2-46: bus/addr err, illegal, div by zero, CHK,
-							* TRAPV, priv viol, trace, line-A/F, reserved,
-							* uninit int, spurious int, autovectors, TRAP #0-14
-	dc.l	HW_DEFAULT
-	ENDR
-
+	SECTION	trap15,text		* linked via Basic.ld into the ROM region
 	dc.l	HW_TRAP15			* 47: TRAP #15 - console/file I/O function calls
 
-	REPT	208				* 48-255: FPU/MMU (unused on 68000), reserved,
-							* user-defined interrupts
-	dc.l	HW_DEFAULT
-	ENDR
-
-	IFNE	(*-HW_VECTORS)-$400	* the linker script gives VECTORS exactly
-	FAIL	'HW_VECTORS is not exactly $400 bytes'	* $400 bytes - catch a
-	ENDC					* wrong REPT count here, at assemble time
-
 	SECTION	text,code		* linked via Basic.ld into the ROM region
-
-HW_DEFAULT
-	BRA.s		HW_DEFAULT			* unhandled vector: safe halt
 
 * TRAP #15 handler - dispatches on the function code in d0 (console/file I/O).
 * fn 5, 6, 7 and 12 are stubbed below, fill in the bodies for the real
@@ -82,32 +97,22 @@ HW_DEFAULT
 
 HW_TRAP15
 	CMP.b		#5,d0				* get byte (blocking)
-	BEQ.s		HW_TRAP15_GETBYTE
+	BNE.s .no_getbyte
+	BRA			HW_TRAP15_GETBYTE
+.no_getbyte:	
 	CMP.b		#6,d0				* character out
-	BEQ.s		HW_TRAP15_PUTBYTE
+	BNE.s .no_putbyte
+	BRA		HW_TRAP15_PUTBYTE
+.no_putbyte:
 	CMP.b		#7,d0				* get status (char waiting?)
-	BEQ.s		HW_TRAP15_STATUS
+	BNE.s	.no_status
+	BRA		HW_TRAP15_STATUS
+.no_status:
 	CMP.b		#12,d0			* keyboard echo on/off
 	BEQ.s		HW_TRAP15_ECHO
 
 HW_TRAP15_UNKNOWN
 	BRA.s		HW_TRAP15_UNKNOWN		* unimplemented trap function: safe halt
-
-* fn 5 - get byte (blocking). return: d1.b = character received
-HW_TRAP15_GETBYTE
-	* TODO: implement
-	RTE
-
-* fn 6 - character out. in: d1.b = character to send
-HW_TRAP15_PUTBYTE
-	* TODO: implement
-	RTE
-
-* fn 7 - get status (non blocking). return: d1.b = 0 if none waiting, <>0 if
-* a character is waiting
-HW_TRAP15_STATUS
-	* TODO: implement
-	RTE
 
 * fn 12 - keyboard echo on/off. in: d1 = 0 (off) / 1 (on)
 HW_TRAP15_ECHO
@@ -220,6 +225,7 @@ LOAD_ascii
 	BRA		LAB_127D			* now we just wait for Basic command, no "Ready"
 
 * input character to register d0 from file
+
 
 LOAD_in
 	MOVEM.l	d1-d2/a1,-(sp)		* save d1, d2 & a1
@@ -373,17 +379,14 @@ SAVE_OUT
 
 * turn off simulator key echo
 
-code_start
-	MOVEQ		#12,d0			* keyboard echo
-	MOVEQ		#0,d1				* turn off echo
-	TRAP		#15				* do I/O function
-
-* end of simulator specific code
-
 * BASIC cold start entry point. assume entry with RAM address in a0 and RAM length
 * in d0, for now we fake that with these extra move instructions
 
+	even
+
 HW_RESET
+START:
+	jsr	ON_RESET_NEOGEO
 	MOVEA.l	#$100000,a0			* tell BASIC where RAM is
 	MOVE.l	#ram_top,d0			* tell BASIC how big RAM is
 
@@ -433,6 +436,8 @@ LAB_sizok
 	LEA		(VEC_CC,PC),a1		* save CTRL-C check vector
 	MOVE.l	a1,(a0)+			* set vector
 
+	JSR SETUP_NEOGEO
+
 * set-up start values
 
 *##LAB_GMEM
@@ -440,10 +445,13 @@ LAB_sizok
 	MOVE.b	d0,Nullct(a3)		* default NULL count
 	MOVE.b	d0,TPos(a3)			* clear terminal position
 	MOVE.b	d0,ccflag(a3)		* allow CTRL-C check
+	MOVE.b  #NEOBASIC_INITIAL_POSITION_X,CursorX(a3)		* default cursor X position
+	MOVE.b  #NEOBASIC_INITIAL_POSITION_Y,CursorY(a3)		* default cursor Y position
+
 	MOVE.w	d0,prg_strt-2(a3)		* clear start word
 	MOVE.w	d0,BHsend(a3)		* clear value to string end word
 
-	MOVE.b	#$50,TWidth(a3)		* default terminal width byte for simulator *##
+	MOVE.b	#NEOBASIC_FIX_WIDTH,TWidth(a3)		* default terminal width byte for simulator *##
 *##	MOVE.b	d0,TWidth(a3)		* default terminal width byte
 
 	MOVE.b	#$0E,TabSiz(a3)		* save default tab size = 14
@@ -644,6 +652,7 @@ LAB_127D
 	MOVE.l	d1,Clinel(a3)		* set current line #
 	MOVE.b	d1,Breakf(a3)		* set break flag
 	LEA		Ibuffs(a3),a5		* set basic execute pointer ready for new line
+
 LAB_127E
 	BSR		LAB_1357			* call for BASIC input
 	BSR		LAB_GBYT			* scan memory
@@ -793,6 +802,7 @@ LAB_INLN
 LAB_1357
 	MOVEQ		#$00,d1			* clear buffer index
 	LEA		Ibuffs(a3),a0		* set buffer base pointer
+	;Breakpoint
 LAB_1359
 	JSR		V_INPT(a3)			* call scan input device
 	BCC.s		LAB_1359			* loop if no byte
@@ -7179,7 +7189,7 @@ TAB_CHRT
 	dc.w	-1					* "Z" $5A no keywords
 	dc.w	-1					* "[" $5B no keywords
 	dc.w	-1					* "\" $5C no keywords
-	dc.w	-1					* "]" $5D no keywords
+	dc.w	-1					 "]" $5D no keywords
 	dc.w	TAB_POWR-TAB_STAR			* "^"	$5E
 
 * Table of Basic keywords for LIST command
@@ -7711,6 +7721,7 @@ LAB_RMSG
 LAB_SMSG
 	dc.b	' Bytes free',$0D,$0A,$0A
 	dc.b	'Enhanced 68k BASIC Version 3.21',$0D,$0A
+	dc.b    'NeoGeo edition',$0D,$0A,$00
 
 *************************************************************************************
 * EhBASIC keywords quick reference list								*

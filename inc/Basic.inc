@@ -135,12 +135,18 @@ ccflag	ds.b	1			* CTRL-C check flag
 ccbyte	ds.b	1			* CTRL-C last received byte
 ccnull	ds.b	1			* CTRL-C last received byte 'life' timer
 
+
 * these variables for simulator load/save routines
 
 file_byte	ds.b	1			* load/save data byte
 file_id	ds.l	1			* load/save file ID
 
-		dc.w	0			* dummy even value and zero pad byte
+;		dc.w	0			* dummy even value and zero pad byte
+keyboard_polling_index ds.b  1 * keyboard polling index. Incremented by the host everytime a key is pressed
+keyboard_polling_index_dummy ds.b  1
+
+CursorX ds.b * Screen cursor column
+CursorY ds.b * Screen cursor row
 
 prg_strt
 
