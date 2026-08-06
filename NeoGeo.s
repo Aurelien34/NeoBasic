@@ -185,14 +185,17 @@ put_byte_to_briconeo_terminal:
 ; Input: d0.b = character to display
 put_byte_to_fix_layer;
 	; Check DEL
+	cmp.b #$08,d0
+	bne .no_del
+	bsr key_pressed_del
+	jmp .visible_character_processed
 
+.no_del:
 	; Check CR
 	cmp.b #$0d,d0
 	bne .not_cr
 	move.b #0,CursorX(a3)
-	move.b CursorX(a3),d0
-	move.b CursorY(a3),d1
-	jsr fix_layer_locate
+	bsr fix_locate_cursor_position
 	jmp .visible_character_processed
 
 .not_cr:
@@ -200,9 +203,7 @@ put_byte_to_fix_layer;
 	cmp.b #$0a,d0
 	bne .not_lf
 	addq.b #1,CursorY(a3)
-	move.b CursorX(a3),d0
-	move.b CursorY(a3),d1
-	jsr fix_layer_locate
+	jsr fix_locate_cursor_position
 	jmp .visible_character_processed
 
 .not_lf:
@@ -219,9 +220,7 @@ put_byte_to_fix_layer;
 	blt .no_wrap
 	move.b #0,CursorX(a3)
 	;addq.b #1,CursorY(a3) ; TODO: understand why this is not required!
-	move.b CursorX(a3),d0 ; should be 0
-	move.b CursorY(a3),d1
-	jsr fix_layer_locate
+	bsr fix_locate_cursor_position
 
 .no_wrap:
 
@@ -232,10 +231,7 @@ put_byte_to_fix_layer;
 
 	jsr fix_scroll_up
 
-	move.b CursorX(a3),d0 ; should be 0
-	move.b CursorY(a3),d1
-	jsr fix_layer_locate
-
+	bsr fix_locate_cursor_position
 
 .no_scroll:
 
@@ -277,5 +273,39 @@ fix_scroll_up:
 	dbra d6,.loop3_1
 
 	movem (sp)+,d6-d7
+
+	rts
+
+key_pressed_del:
+	; Check buffer size
+	cmp.b #0,CursorX(a3)
+	beq .left_border_reached
+	subq.b #1,CursorX(a3)
+	bsr fix_locate_cursor_position
+	bra .delete_current_char
+
+.left_border_reached:
+	cmp.b #0,CursorY(a3)
+	beq .delete_current_char
+
+	subq.b #1,CursorY(a3)
+	move.b #NEOBASIC_FIX_WIDTH-1,CursorX(a3)
+	bsr fix_locate_cursor_position
+
+.delete_current_char
+	move #' ',REG_VRAMRW
+	bsr fix_locate_cursor_position
+
+	rts
+
+; Position the fix pointer to the cursor exptected position
+fix_locate_cursor_position:
+	movem d0-d1,-(sp)
+
+	move.b CursorX(a3),d0
+	move.b CursorY(a3),d1
+	jsr fix_layer_locate
+
+	movem (sp)+,d0-d1
 
 	rts

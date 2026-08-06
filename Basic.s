@@ -802,7 +802,7 @@ LAB_INLN
 LAB_1357
 	MOVEQ		#$00,d1			* clear buffer index
 	LEA		Ibuffs(a3),a0		* set buffer base pointer
-	;Breakpoint
+
 LAB_1359
 	JSR		V_INPT(a3)			* call scan input device
 	BCC.s		LAB_1359			* loop if no byte
