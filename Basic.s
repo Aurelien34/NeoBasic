@@ -6151,6 +6151,13 @@ LAB_WDLP
 RTS_023
 	RTS
 
+* perform CLS
+
+LAB_CLS
+	BNE		RTS_005			* exit if not end of statement (do syntax error)
+	JSR Extension_CLS
+	RTS
+
 * perform SQR()
 
 * d0 is number to find the root of
@@ -6611,7 +6618,9 @@ TK_GET		EQU TK_WIDTH+1		* $A4
 TK_SWAP		EQU TK_GET+1		* $A5
 TK_BITSET		EQU TK_SWAP+1		* $A6
 TK_BITCLR		EQU TK_BITSET+1		* $A7
-TK_TAB		EQU TK_BITCLR+1		* $A8
+TK_CLS		EQU TK_BITCLR+1		* $A8
+TK_TAB		EQU TK_CLS+1			* $A9 (note: this shifts all following token
+								* values up by one; comments below are stale)
 TK_TO			EQU TK_TAB+1		* $A9
 TK_FN			EQU TK_TO+1			* $AA
 TK_SPC		EQU TK_FN+1			* $AB
@@ -7003,6 +7012,7 @@ LAB_CTBL
 	dc.w	LAB_SWAP-LAB_CTBL			* SWAP
 	dc.w	LAB_BITSET-LAB_CTBL		* BITSET
 	dc.w	LAB_BITCLR-LAB_CTBL		* BITCLR
+	dc.w	LAB_CLS-LAB_CTBL			* CLS
 
 * function pre process routine table
 
@@ -7277,6 +7287,8 @@ LAB_KEYT
 	dc.w	KEY_BITSET-TAB_STAR		* BITSET
 	dc.b	'B',4
 	dc.w	KEY_BITCLR-TAB_STAR		* BITCLR
+	dc.b	'C',1
+	dc.w	KEY_CLS-TAB_STAR			* CLS
 	dc.b	'T',2
 	dc.w	KEY_TAB-TAB_STAR			* TAB(
 
@@ -7514,6 +7526,8 @@ KEY_CONT
 	dc.b	'ONT',TK_CONT			* CONT
 KEY_COS
 	dc.b	'OS(',TK_COS			* COS(
+KEY_CLS
+	dc.b	'LS',TK_CLS				* CLS
 	dc.b	$00
 TAB_ASCD
 KEY_DATA

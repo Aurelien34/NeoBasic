@@ -5,7 +5,7 @@
     global ON_RESET_NEOGEO, SETUP_NEOGEO
     global VBLANK, HBLANK
 	global HW_TRAP15_GETBYTE, HW_TRAP15_PUTBYTE, HW_TRAP15_STATUS
-
+	global fix_layer_cls, fix_locate_cursor_position
 
     section header
 	; Magic word - 8 bytes
@@ -127,9 +127,9 @@ fix_layer_cls:
     move.w #1,REG_VRAMMOD
     ; Loop counter
     move.w #1279,d7
-.drawLoop
 	move.b #' ',d0
 	jsr get_tile_address_for_char
+.drawLoop
     move.w d0,REG_VRAMRW
     dbra d7,.drawLoop
 	move.w #$20,REG_VRAMMOD
