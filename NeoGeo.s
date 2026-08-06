@@ -38,6 +38,7 @@ SETUP_NEOGEO
 
 	; Palette initialization
 	jsr init_palette
+	move.w #$f000,CurrentColorMask(a3)
 
 	; Fix layer intialization
 	jsr fix_layer_cls
@@ -105,11 +106,13 @@ HW_TRAP15_STATUS
 init_palette:
 	move.b #0,REG_PALBANK0          ; Select first bank
 
-    move.l #PALETTE_RAM_START,a0
+    move.l #PALETTE_RAM_START+2,a0
     move.w #16*16-1,d7
 	move.l #.fix_palette_data,a1
 .loopclear:
     move.w (a1)+,(a0)+
+	move.w #$0,(a0)+
+	add.l #(16-2)*2,a0
     dbra d7,.loopclear
 
     move.w #$8000,PALETTE_RAM_START ; pure black background
@@ -118,7 +121,6 @@ init_palette:
 	rts
 .fix_palette_data:
 	dc.w $8000, $900F, $A0F0, $A0FF, $CF00, $CF0F, $DFF0, $DFFF, $0444, $100F, $20F0, $30FF, $4F00, $5F0F, $6FF0, $7FFF
-	;dc.w $8000, $ffff, $8000, $ffff, $8000, $ffff, $8000, $ffff, $8000, $ffff, $8000, $ffff, $8000, $ffff, $8000, $ffff
 
 fix_layer_cls:
     movem.l d7,-(sp)
@@ -142,8 +144,10 @@ fix_layer_cls:
 ; Input: d0.b = character to display
 ; Output: d0.w = address of the tile in the tilemap
 get_tile_address_for_char:
-	and.w #$00ff,d0
 	
+	and.w #$00ff,d0
+	or.w CurrentColorMask(a3),d0 ; Apply current color
+
 	rts
 .char_tile_mapping
 
@@ -329,10 +333,10 @@ BasicNeo_cursor_blink_loop:
 	move.b #0,CursorBlink_counter(a3)
 	bra .end
 .b1:
-	move #0,d0
+	move #$f000,d0
 	bra .show
 .b2:
-	move #' ',d0
+	move #$f000+' ',d0
 .show:
 
 	move.w #0,REG_VRAMMOD

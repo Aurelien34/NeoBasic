@@ -151,6 +151,9 @@ CursorBlink_counter ds.b 1 * Animation counter
 
 filler ds.b 1 * For parity
 
+CurrentColorMask ds.w 1 * Current palette color index
+
+
 		dc.w	0			* dummy even value and zero pad byte
 
 prg_strt

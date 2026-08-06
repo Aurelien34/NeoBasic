@@ -6163,6 +6163,24 @@ LAB_CLS
 	JSR Extension_CLS
 	RTS
 
+* perform COLOR
+
+LAB_COLOR
+	BSR		LAB_GTBY			* get byte parameter (0-255), result in d0 and Itemp
+
+	CMP.b		#16,d0			* valid range is 0-15
+	BCC		LAB_FCER			* if >= 16 do function call error & exit
+
+	MOVE.b	d0,d1				* save validated colour value, LAB_GBYT trashes d0
+
+	BSR		LAB_GBYT			* get BASIC byte back
+	BNE		LAB_SNER			* if not end of statement do syntax error
+
+	MOVE.b	d1,d0				* restore colour value
+	JSR Extension_COLOR
+
+	RTS
+
 * perform SQR()
 
 * d0 is number to find the root of
@@ -6624,7 +6642,8 @@ TK_SWAP		EQU TK_GET+1		* $A5
 TK_BITSET		EQU TK_SWAP+1		* $A6
 TK_BITCLR		EQU TK_BITSET+1		* $A7
 TK_CLS		EQU TK_BITCLR+1		* $A8
-TK_TAB		EQU TK_CLS+1			* $A9 (note: this shifts all following token
+TK_COLOR		EQU TK_CLS+1			* $A9
+TK_TAB		EQU TK_COLOR+1		* $AA (note: this shifts all following token
 								* values up by one; comments below are stale)
 TK_TO			EQU TK_TAB+1		* $A9
 TK_FN			EQU TK_TO+1			* $AA
@@ -7018,6 +7037,7 @@ LAB_CTBL
 	dc.w	LAB_BITSET-LAB_CTBL		* BITSET
 	dc.w	LAB_BITCLR-LAB_CTBL		* BITCLR
 	dc.w	LAB_CLS-LAB_CTBL			* CLS
+	dc.w	LAB_COLOR-LAB_CTBL		* COLOR
 
 * function pre process routine table
 
@@ -7294,6 +7314,8 @@ LAB_KEYT
 	dc.w	KEY_BITCLR-TAB_STAR		* BITCLR
 	dc.b	'C',1
 	dc.w	KEY_CLS-TAB_STAR			* CLS
+	dc.b	'C',3
+	dc.w	KEY_COLOR-TAB_STAR		* COLOR
 	dc.b	'T',2
 	dc.w	KEY_TAB-TAB_STAR			* TAB(
 
@@ -7533,6 +7555,8 @@ KEY_COS
 	dc.b	'OS(',TK_COS			* COS(
 KEY_CLS
 	dc.b	'LS',TK_CLS				* CLS
+KEY_COLOR
+	dc.b	'OLOR',TK_COLOR			* COLOR
 	dc.b	$00
 TAB_ASCD
 KEY_DATA
