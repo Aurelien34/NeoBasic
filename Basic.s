@@ -1241,7 +1241,18 @@ LAB_15D1
 	CMP.b		#$3A,d0			* compare with ":"
 	BEQ.s		LAB_15F6			* loop if was statement separator
 
-	BRA		LAB_SNER			* else syntax error, then warm start
+	CMP.b		#TK_ELSE,d0		* compare with "ELSE" token
+	BNE		LAB_SNER			* else syntax error, then warm start
+
+* the THEN-clause was executed so skip the else-clause (rest of line)
+
+LAB_15E2
+	TST.b		(a5)+				* test byte & increment pointer
+	BNE.s		LAB_15E2			* loop if not [EOL]
+
+								* (a5)+ already left the pointer one past [EOL],
+								* which is exactly what LAB_15DC expects
+	BRA		LAB_15DC			* go handle end of line
 
 * tail of IF command
 
@@ -1554,7 +1565,20 @@ LAB_IF
 LAB_174B
 	MOVE.b	FAC1_e(a3),d0		* get FAC1 exponent
 	BNE		LAB_1754			* branch if result was non zero
-							* else ....
+
+* condition was false: skip the THEN-clause, looking for an ELSE token or [EOL]
+* (LAB_1754 will consume the ELSE token itself via LAB_IGBY, same as THEN/GOTO)
+
+LAB_IFEL
+	MOVE.b	(a5),d0			* peek byte, don't consume yet
+	BEQ		RTS_006			* branch if [EOL], nothing more to do
+
+	CMP.b		#TK_ELSE,d0		* compare with "ELSE" token
+	BEQ		LAB_1754			* found it: go do the else-clause
+
+	ADDQ.w	#1,a5				* else skip this byte and keep scanning
+	BRA.s		LAB_IFEL
+
 * perform REM, skip (rest of) line
 
 LAB_REM
@@ -1793,6 +1817,10 @@ LAB_1831
 	CMP.b		#';',d0			* compare with ";"
 	BEQ		LAB_18BD			* if ";" continue with PRINT processing
 
+	CMP.b		#TK_ELSE,d0			* compare with "ELSE" token
+	BEQ		LAB_CRLF			* implicit end of list (no ";"/",") : print CR/LF,
+								* leave ELSE for the statement dispatcher
+
 	BSR		LAB_EVEX			* evaluate expression
 	TST.b		Dtypef(a3)			* test data type, $80=string, $40=integer,
 							* $00=float
@@ -1884,8 +1912,14 @@ LAB_18B8
 							* continue with PRINT processing
 LAB_18BD
 	BSR		LAB_IGBY			* increment & scan memory
-	BNE		LAB_1831			* if byte continue executing PRINT
+	BEQ.s		LAB_18BF			* exit if nothing more to print ([EOL])
 
+	CMP.b		#TK_ELSE,d0			* compare with "ELSE" token
+	BEQ.s		LAB_18BF			* exit, leave ELSE for the statement dispatcher
+
+	BRA		LAB_1831			* else byte continue executing PRINT
+
+LAB_18BF
 	RTS						* exit if nothing more to print
 
 * print null terminated string from a0
@@ -6723,7 +6757,8 @@ TK_NOT		EQU TK_THEN+1		* $AD
 TK_STEP		EQU TK_NOT+1		* $AE
 TK_UNTIL		EQU TK_STEP+1		* $AF
 TK_WHILE		EQU TK_UNTIL+1		* $B0
-TK_PLUS		EQU TK_WHILE+1		* $B1
+TK_ELSE		EQU TK_WHILE+1		* $B1
+TK_PLUS		EQU TK_ELSE+1		* $B2
 TK_MINUS		EQU TK_PLUS+1		* $B2
 TK_MULT		EQU TK_MINUS+1		* $B3
 TK_DIV		EQU TK_MULT+1		* $B4
@@ -7417,6 +7452,8 @@ LAB_KEYT
 	dc.w	KEY_UNTIL-TAB_STAR		* UNTIL
 	dc.b	'W',3
 	dc.w	KEY_WHILE-TAB_STAR		* WHILE
+	dc.b	'E',2
+	dc.w	KEY_ELSE-TAB_STAR			* ELSE
 
 	dc.b	'+',-1
 	dc.w	KEY_PLUS-TAB_STAR			* +
@@ -7669,6 +7706,8 @@ KEY_EOR
 	dc.b	'OR',TK_EOR				* EOR
 KEY_EXP
 	dc.b	'XP(',TK_EXP			* EXP(
+KEY_ELSE
+	dc.b	'LSE',TK_ELSE			* ELSE
 	dc.b	$00
 TAB_ASCF
 KEY_FOR
