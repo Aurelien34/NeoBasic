@@ -1,5 +1,10 @@
 OBJPATH = obj
+LABPATH=.\TestPrograms\Source
+BASPATH=.\TestPrograms\Basic
+
 OBJ = $(patsubst %.s,$(OBJPATH)/%.o,$(wildcard *.s))
+LAB_SRC = $(wildcard $(LABPATH)/*.lab)
+BAS_OUT = $(patsubst $(LABPATH)/%.lab,$(BASPATH)/%.bas,$(LAB_SRC))
 
 ifeq ($(OS),Windows_NT)
 	RM_CMD = cmd /C del /Q
@@ -11,7 +16,15 @@ endif
 run: Basic.bin
 	copy Basic.bin E:
 
-all: Basic.bin
+rom: Basic.bin
+
+bas: $(BASPATH) $(BAS_OUT)
+
+$(BASPATH)/%.bas: $(LABPATH)/%.lab
+	powershell -NoProfile -ExecutionPolicy Bypass -File LabToBas.ps1 $< $@
+
+$(BASPATH):
+	mkdir $(BASPATH)
 
 rebuild:
 	make clean
