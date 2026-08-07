@@ -6181,6 +6181,36 @@ LAB_COLOR
 
 	RTS
 
+* perform LOCATE
+
+LAB_LOCATE
+	BSR		LAB_GTBY			* get X byte parameter (0-255), result in d0
+
+	CMP.b		#NEOBASIC_FIX_WIDTH,d0	* valid range is 0..NEOBASIC_FIX_WIDTH-1
+	BCC		LAB_FCER			* if >= WIDTH do function call error & exit
+
+	MOVE.l	d0,-(sp)			* save validated X, evaluating Y below trashes registers
+
+	BSR		LAB_GBYT			* get BASIC byte back
+	CMP.b		#',',d0			* must be followed by ","
+	BNE		LAB_SNER			* if not do syntax error
+
+	BSR		LAB_SGBY			* increment past "," and evaluate Y, result in d0
+
+	CMP.b		#NEOBASIC_FIX_HEIGHT,d0	* valid range is 0..NEOBASIC_FIX_HEIGHT-1
+	BCC		LAB_FCER			* if >= HEIGHT do function call error & exit
+
+	MOVE.b	d0,d1				* save validated Y value, LAB_GBYT trashes d0
+
+	BSR		LAB_GBYT			* get BASIC byte back
+	BNE		LAB_SNER			* if not end of statement do syntax error
+
+	MOVE.l	(sp)+,d0			* restore X
+
+	JSR Extension_LOCATE
+
+	RTS
+
 * perform SQR()
 
 * d0 is number to find the root of
@@ -6643,7 +6673,8 @@ TK_BITSET		EQU TK_SWAP+1		* $A6
 TK_BITCLR		EQU TK_BITSET+1		* $A7
 TK_CLS		EQU TK_BITCLR+1		* $A8
 TK_COLOR		EQU TK_CLS+1			* $A9
-TK_TAB		EQU TK_COLOR+1		* $AA (note: this shifts all following token
+TK_LOCATE		EQU TK_COLOR+1		* $AA
+TK_TAB		EQU TK_LOCATE+1		* $AB (note: this shifts all following token
 								* values up by one; comments below are stale)
 TK_TO			EQU TK_TAB+1		* $A9
 TK_FN			EQU TK_TO+1			* $AA
@@ -7038,6 +7069,7 @@ LAB_CTBL
 	dc.w	LAB_BITCLR-LAB_CTBL		* BITCLR
 	dc.w	LAB_CLS-LAB_CTBL			* CLS
 	dc.w	LAB_COLOR-LAB_CTBL		* COLOR
+	dc.w	LAB_LOCATE-LAB_CTBL		* LOCATE
 
 * function pre process routine table
 
@@ -7316,6 +7348,8 @@ LAB_KEYT
 	dc.w	KEY_CLS-TAB_STAR			* CLS
 	dc.b	'C',3
 	dc.w	KEY_COLOR-TAB_STAR		* COLOR
+	dc.b	'L',4
+	dc.w	KEY_LOCATE-TAB_STAR		* LOCATE
 	dc.b	'T',2
 	dc.w	KEY_TAB-TAB_STAR			* TAB(
 
@@ -7632,6 +7666,8 @@ KEY_LOKE
 	dc.b	'OKE',TK_LOKE			* LOKE
 KEY_LOOP
 	dc.b	'OOP',TK_LOOP			* LOOP
+KEY_LOCATE
+	dc.b	'OCATE',TK_LOCATE			* LOCATE
 	dc.b	$00
 TAB_ASCM
 KEY_MAX
