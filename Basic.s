@@ -6244,12 +6244,6 @@ LAB_COLOR
 	CMP.b		#16,d0			* valid range is 0-15
 	BCC		LAB_FCER			* if >= 16 do function call error & exit
 
-	MOVE.b	d0,d1				* save validated colour value, LAB_GBYT trashes d0
-
-	BSR		LAB_GBYT			* get BASIC byte back
-	BNE		LAB_SNER			* if not end of statement do syntax error
-
-	MOVE.b	d1,d0				* restore colour value
 	JSR Extension_COLOR
 
 	RTS
@@ -6273,10 +6267,7 @@ LAB_LOCATE
 	CMP.b		#NEOBASIC_FIX_HEIGHT,d0	* valid range is 0..NEOBASIC_FIX_HEIGHT-1
 	BCC		LAB_FCER			* if >= HEIGHT do function call error & exit
 
-	MOVE.b	d0,d1				* save validated Y value, LAB_GBYT trashes d0
-
-	BSR		LAB_GBYT			* get BASIC byte back
-	BNE		LAB_SNER			* if not end of statement do syntax error
+	MOVE.b	d0,d1				* save validated Y value
 
 	MOVE.l	(sp)+,d0			* restore X
 
