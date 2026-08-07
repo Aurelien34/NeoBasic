@@ -4219,10 +4219,49 @@ LAB_LEEK
 	MOVE.l	(a0),d0			* get longword
 	BRA		LAB_AYFC			* convert d0 to signed longword in FAC1 & return
 
+* perform STICK()
+* argument was pre-evaluated into FAC1 by LAB_PPFN
+
+LAB_STICK
+	BSR		LAB_EVIR			* evaluate integer expression
+								* (does FC error not OF error if out of range)
+	CMP.b		#1,d0				* valid range is 0-1
+	BHI		LAB_FCER			* if > 1 do function call error & exit
+
+	JSR Extension_STICK
+
+	BRA		LAB_1FD0			* convert d0 to unsigned byte in FAC1 & return
+
+* perform STRIG()
+* argument was pre-evaluated into FAC1 by LAB_PPFN
+
+LAB_STRIG
+	BSR		LAB_EVIR			* evaluate integer expression
+								* (does FC error not OF error if out of range)
+	CMP.b		#1,d0				* valid range is 0-1
+	BHI		LAB_FCER			* if > 1 do function call error & exit
+
+	JSR Extension_STRIG
+
+	BRA		LAB_1FD0			* convert d0 to unsigned byte in FAC1 & return
+
+* perform SSTART()
+* argument was pre-evaluated into FAC1 by LAB_PPFN
+
+LAB_SSTART
+	BSR		LAB_EVIR			* evaluate integer expression
+								* (does FC error not OF error if out of range)
+	CMP.b		#1,d0				* valid range is 0-1
+	BHI		LAB_FCER			* if > 1 do function call error & exit
+
+	JSR Extension_SSTART
+
+	BRA		LAB_1FD0			* convert d0 to unsigned byte in FAC1 & return
+
 * perform DOKE
 
 LAB_DOKE
-	BSR.s		LAB_GADW			* get two parameters for DOKE or WAIT
+	BSR			LAB_GADW			* get two parameters for DOKE or WAIT
 							* first parameter in a0, second in d0
 	MOVE.w	d0,(a0)			* put word in memory
 	RTS
@@ -4230,7 +4269,7 @@ LAB_DOKE
 * perform LOKE
 
 LAB_LOKE
-	BSR.s		LAB_GEAD			* get even address for word/long memory actions
+	BSR		LAB_GEAD			* get even address for word/long memory actions
 							* address returned in d0 and on the stack
 	BSR		LAB_1C01			* scan for "," , else do syntax error/warm start
 	BSR		LAB_EVNM			* evaluate expression & check is numeric,
@@ -6734,6 +6773,9 @@ TK_SADD		EQU TK_VPTR+1		* $DF
 TK_LEFTS		EQU TK_SADD+1		* $E0
 TK_RIGHTS		EQU TK_LEFTS+1		* $E1
 TK_MIDS		EQU TK_RIGHTS+1		* $E2
+TK_STICK		EQU TK_MIDS+1		* $E3
+TK_STRIG		EQU TK_STICK+1		* $E4
+TK_SSTART		EQU TK_STRIG+1		* $E5
 
 ************************************************************************************
 
@@ -7111,6 +7153,9 @@ LAB_FTPP
 	dc.w	LAB_LRMS-LAB_FTPP			* LEFT$()	process string expression
 	dc.w	LAB_LRMS-LAB_FTPP			* RIGHT$()		"
 	dc.w	LAB_LRMS-LAB_FTPP			* MID$()		"
+	dc.w	LAB_PPFN-LAB_FTPP			* STICK(n)	process numeric expression in ()
+	dc.w	LAB_PPFN-LAB_FTPP			* STRIG(n)		"
+	dc.w	LAB_PPFN-LAB_FTPP			* SSTART(n)		"
 
 * action addresses for functions
 
@@ -7152,6 +7197,9 @@ LAB_FTBL
 	dc.w	LAB_LEFT-LAB_FTBL			* LEFT$()
 	dc.w	LAB_RIGHT-LAB_FTBL		* RIGHT$()
 	dc.w	LAB_MIDS-LAB_FTBL			* MID$()
+	dc.w	LAB_STICK-LAB_FTBL		* STICK()
+	dc.w	LAB_STRIG-LAB_FTBL		* STRIG()
+	dc.w	LAB_SSTART-LAB_FTBL		* SSTART()
 
 * hierarchy and action addresses for operator
 
@@ -7471,6 +7519,12 @@ LAB_KEYT
 	dc.w	KEY_RIGHTS-TAB_STAR		* RIGHT$(
 	dc.b	'M',3
 	dc.w	KEY_MIDS-TAB_STAR			* MID$(
+	dc.b	'S',4
+	dc.w	KEY_STICK-TAB_STAR		* STICK(
+	dc.b	'S',4
+	dc.w	KEY_STRIG-TAB_STAR		* STRIG(
+	dc.b	'S',5
+	dc.w	KEY_SSTART-TAB_STAR		* SSTART(
 
 * BASIC error messages
 
@@ -7744,6 +7798,12 @@ KEY_STRS
 	dc.b	'TR$(',TK_STRS			* STR$(
 KEY_SWAP
 	dc.b	'WAP',TK_SWAP			* SWAP
+KEY_STICK
+	dc.b	'TICK(',TK_STICK			* STICK(
+KEY_STRIG
+	dc.b	'TRIG(',TK_STRIG			* STRIG(
+KEY_SSTART
+	dc.b	'START(',TK_SSTART			* SSTART(
 	dc.b	$00
 TAB_ASCT
 KEY_TAB
