@@ -7889,7 +7889,8 @@ LAB_RMSG
 	dc.b	$0D,$0A,'Ready',$0D,$0A,$00
 LAB_SMSG
 	dc.b	' Bytes free',$0D,$0A,$0A
-	dc.b	'Enhanced 68k BASIC Version 3.21',$0D,$0A
+	dc.b	'Enhanced 68k BASIC',$0D,$0A
+	dc.b	'Version 3.21',$0D,$0A
 	dc.b    'NeoGeo edition',$0D,$0A,$00
 
 *************************************************************************************

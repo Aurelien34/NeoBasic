@@ -42,6 +42,7 @@ SETUP_NEOGEO
 
 	; Fix layer intialization
 	jsr fix_layer_cls
+	jsr fix_layer_show_snk
 
 	move.b #NEOBASIC_INITIAL_POSITION_X,d0
 	move.b #NEOBASIC_INITIAL_POSITION_Y,d1
@@ -106,14 +107,23 @@ HW_TRAP15_STATUS
 init_palette:
 	move.b #0,REG_PALBANK0          ; Select first bank
 
+	; Setup first palette
+    move.l #PALETTE_RAM_START,a0
+    move.w #16-1,d7
+	move.l #.fix_palette_data,a1
+.loopclear1:
+    move.w (a1)+,(a0)+
+    dbra d7,.loopclear1
+
+	; Setup every first color of all palettes
     move.l #PALETTE_RAM_START+2,a0
     move.w #16*16-1,d7
-	move.l #.fix_palette_data,a1
-.loopclear:
+	lea .fix_palette_data(pc),a1
+.loopclear2:
     move.w (a1)+,(a0)+
 	move.w #$0,(a0)+
 	add.l #(16-2)*2,a0
-    dbra d7,.loopclear
+    dbra d7,.loopclear2
 
     move.w #$8000,PALETTE_RAM_START ; pure black background
     move.w #$8000,PALETTE_BACKDROP
@@ -126,7 +136,7 @@ fix_layer_cls:
     movem.l d7,-(sp)
 
     ; Set VRAM start address
-    move.w #$7000,REG_VRAMADD
+    move.w #VRAM_ADDRESS_FIX,REG_VRAMADD
     ; Increment after each write
     move.w #1,REG_VRAMMOD
     ; Loop counter
@@ -140,6 +150,27 @@ fix_layer_cls:
 
     movem.l (sp)+,d7
 	rts
+
+; Display the SNK logo in the top right corner
+fix_layer_show_snk
+    movem.l d0/d6-d7/a0,-(sp)
+	move.w #VRAM_ADDRESS_FIX+NEOBASIC_FIX_TOP_ROW+1+2*(NEOBASIC_FIX_WIDTH-10+NEOBASIC_FIX_LEFT_COLUMN)*16,d0
+	lea .logodata(pc),a0
+	move.w #3-1,d7
+.loopy
+	move.w #10-1,d6
+    move.w d0,REG_VRAMADD
+.loopx
+	move.w (a0)+,REG_VRAMRW
+	dbra d6,.loopx
+	addq.w #1,d0
+	dbra d7,.loopy
+    movem.l (sp)+,d0/d6-d7/a0
+	rts
+.logodata
+	dc.w $200, $201, $202, $203, $204, $205, $206, $207, $208, $209
+	dc.w $20a, $20b, $20c, $20d, $20e, $20f, $214, $215, $216, $217
+	dc.w $218, $219, $21a, $21b, $21c, $21d, $21e, $21f, $240, $25e
 
 ; Input: d0.b = character to display
 ; Output: d0.w = address of the tile in the tilemap
@@ -163,7 +194,7 @@ fix_layer_locate:
 	; Calculate the tilemap address
 	lsl.w #5,d0 ; 32 rows before moving to the next column
 	add.w d1,d0 ; add row offset
-	add.w #$7000,d0 ; add the fix layer address offset
+	add.w #VRAM_ADDRESS_FIX,d0 ; add the fix layer address offset
 
 	; Send to VRAM Address register
 	move.w d0,REG_VRAMADD
@@ -247,7 +278,7 @@ fix_scroll_up:
 	movem d6-d7,-(sp)
 
 
-	move.w #$7000,d1
+	move.w #VRAM_ADDRESS_FIX,d1
 	move.w #$7001,REG_VRAMADD
 	move.w #2,REG_VRAMMOD
 	move.w #1280-2,d7
@@ -259,7 +290,7 @@ fix_scroll_up:
 	dbra d7,.loop
 	move.w #$20,REG_VRAMMOD
 
-	move.w #$7000+NEOBASIC_FIX_TOP_ROW+NEOBASIC_FIX_HEIGHT-1,REG_VRAMADD
+	move.w #VRAM_ADDRESS_FIX+NEOBASIC_FIX_TOP_ROW+NEOBASIC_FIX_HEIGHT-1,REG_VRAMADD
 	move.w #39,d7
 .loop2:
 	move.w #' ',REG_VRAMRW
@@ -267,7 +298,7 @@ fix_scroll_up:
 	nop
 	dbra d7,.loop2
 
-	move.w #$7000,d0
+	move.w #VRAM_ADDRESS_FIX,d0
 	move.w #NEOBASIC_FIX_TOP_ROW-1,d6
 .loop3_1:
 	move.w d0,REG_VRAMADD
