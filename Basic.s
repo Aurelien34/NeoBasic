@@ -7890,8 +7890,8 @@ LAB_RMSG
 LAB_SMSG
 	dc.b	' Bytes free',$0D,$0A,$0A
 	dc.b	'Enhanced 68k BASIC',$0D,$0A
-	dc.b	'Version 3.21',$0D,$0A
-	dc.b    'NeoGeo edition',$0D,$0A,$00
+	dc.b	'Version 3.21++',$0D,$0A
+	dc.b    'NeoRetroGeo edition',$0D,$0A,$00
 
 *************************************************************************************
 * EhBASIC keywords quick reference list								*
