@@ -121,7 +121,7 @@ KEYBOARD_TIMER_ROUTINE
 	rte
 
 .key_found:
-	movem.l d0-d1/a0,-(sp)
+	movem.l d1/a0,-(sp)
 
 	; store the polling index for the next round
 	move.b d0,keyboard_polling_index(a3)
@@ -152,7 +152,7 @@ KEYBOARD_TIMER_ROUTINE
 	addq.w #1,KeyboardQueueLength(a3)
 .exit:
 
-	movem.l (sp)+,d0-d1/a0
+	movem.l (sp)+,d1/a0
 	move.w (sp)+,d0
 	rte
 
