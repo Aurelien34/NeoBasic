@@ -3,7 +3,7 @@
 	include "inc/trace.inc"
 
     global ON_RESET_NEOGEO, SETUP_NEOGEO
-    global VBLANK, HBLANK
+    global VBLANK, KEYBOARD_TIMER_ROUTINE
 	global HW_TRAP15_GETBYTE, HW_TRAP15_PUTBYTE, HW_TRAP15_STATUS
 	global fix_layer_cls, fix_locate_cursor_position
 	global BasicNeo_cursor_blink_start, BasicNeo_cursor_blink_loop, BasicNeo_cursor_blink_stop
@@ -35,6 +35,9 @@ SETUP_NEOGEO
 	; Keyboard initialization
 	move.b BRICO_KEYBOARD_IN,d0
 	move.b d0,keyboard_polling_index(a3)
+	move.w #0,KeyboardQueueLength(a3)
+	move.w #0,KeyboardQueuePtrRead(a3)
+	move.w #0,KeyboardQueuePtrWrite(a3)
 
 	; Palette initialization
 	jsr init_palette
@@ -48,6 +51,11 @@ SETUP_NEOGEO
 	move.b #NEOBASIC_INITIAL_POSITION_Y,d1
 	jsr fix_layer_locate
 
+    ; Setup keyboard watcher timer
+    move.w #0,(REG_TIMERHIGH).l
+    move.w #20000,(REG_TIMERLOW).l ; 20000*166.7ns period
+	move.w #%0000000011111000,(REG_LSPCMODE).l ; stop animations, enable timer interrupts, autoreset when reaches 0
+
     rts
 
 VBLANK
@@ -56,23 +64,123 @@ VBLANK
 	addq.b #1,CursorBlink_counter(a3)
 	rte
 
-HBLANK
+; Number in d0.w
+DbgWriteNumberToFixLayerWord
+	move.w d0,-(sp)
+
+	rol.w #8,d0
+	bsr DbgWriteNumberToFixLayerByte
+	rol.w #8,d0
+	bsr DbgWriteNumberToFixLayerByte
+
+	move.w (sp)+,d0
+	rts
+
+; Number in d0.b
+DbgWriteNumberToFixLayerByte
+	move.w d0,-(sp)
+
+	rol.b #4,d0
+	bsr DbgWriteNumberToFixLayerNibble
+	rol.b #4,d0
+	bsr DbgWriteNumberToFixLayerNibble
+
+	move.w (sp)+,d0
+	rts
+
+; Number in d0.b
+DbgWriteNumberToFixLayerNibble
+	movem.w d0-d1,-(sp)
+
+	andi.b #$0f,d0
+	cmp.b #$a,d0
+	blt .number
+	addi.b #'a'-10,d0
+	bra .continue
+.number:
+	addi.b #'0',d0
+
+.continue:
+	move.w #$f000,d1
+	move.b d0,d1
+	move.w d1,REG_VRAMRW
+
+	movem.w (sp)+,d0-d1
+	rts
+
+KEYBOARD_TIMER_ROUTINE
+	move.w	#2,(REG_IRQACK).l ; ack timer IRQ
+
+	move.w d0,-(sp)
+	; Check if a key is available
+	move.b BRICO_KEYBOARD_IN,d0
+	cmp.b keyboard_polling_index(a3),d0
+	bne .key_found
+	; key not found, return as quickly as possible
+	move.w (sp)+,d0
+	rte
+
+.key_found:
+	movem.l d0-d1/a0,-(sp)
+
+	; store the polling index for the next round
+	move.b d0,keyboard_polling_index(a3)
+	; ensure there is enough room in the queue
+	cmp #NEOBASIC_KEYBOARD_QUEUE_SIZE,KeyboardQueueLength(a3)
+	bne .enoughRoomInTheQueue
+	; not enough room in the queue, skip the key!
+	bra .exit
+
+.enoughRoomInTheQueue:
+	; push the key in the queue
+	move.w KeyboardQueuePtrWrite(a3),d0
+	lea KeyboardQueue(a3),a0
+	move.b BRICO_KEYBOARD_IN+1,d1
+	move.b d1,(a0,d0.w)
+	; increment the write pointer
+	addq.w #1,d0
+	; check if we need to roll the pointer
+	cmp.w #NEOBASIC_KEYBOARD_QUEUE_SIZE,d0
+	bne .ptrValid
+	; roll the pointer
+	move.w #0,d0
+.ptrValid:
+	; store the new pointer value
+	move.w d0,KeyboardQueuePtrWrite(a3)
+
+	; incremement queue length
+	addq.w #1,KeyboardQueueLength(a3)
+.exit:
+
+	movem.l (sp)+,d0-d1/a0
+	move.w (sp)+,d0
 	rte
 
 * fn 5 - get byte (blocking). return: d1.b = character received
 HW_TRAP15_GETBYTE
-
+	movem.l d0/a0,-(sp)
 	; Wait for a key to be pressed
 .wait_for_key
-	move.b BRICO_KEYBOARD_IN,d1
-	cmp.b keyboard_polling_index(a3),d1
+	cmp.w #0,KeyboardQueueLength(a3)
 	beq .wait_for_key
-
-	; Store the polling index for the next call
-	move.b d1,keyboard_polling_index(a3)
-
 	; Get the key
-	move.b BRICO_KEYBOARD_IN+1,d1
+	move.w KeyboardQueuePtrRead(a3),d0
+	lea KeyboardQueue(a3),a0
+	move.b (a0,d0.w),d1 ; read the key to d1 here
+	; increment the read pointer
+	addq.w #1,d0
+	; check if we need to roll the pointer
+	cmp.w #NEOBASIC_KEYBOARD_QUEUE_SIZE,d0
+	bne .ptrValid
+	; roll the pointer
+	move.w #0,d0
+.ptrValid:
+	; store the new pointer value
+	move.w d0,KeyboardQueuePtrRead(a3)
+	; decremement queue length
+	subq.w #1,KeyboardQueueLength(a3)
+
+	movem.l (sp)+,d0/a0
 
 	RTE
 
@@ -94,8 +202,7 @@ HW_TRAP15_PUTBYTE
 * a character is waiting
 HW_TRAP15_STATUS
 
-	move.b BRICO_KEYBOARD_IN,d1
-	cmp.b keyboard_polling_index(a3),d1
+	cmp.w #0,KeyboardQueueLength(a3)
 	beq .nochar
 	move.b #1,d1
 	RTE

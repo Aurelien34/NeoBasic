@@ -78,7 +78,7 @@ HW_VECTORS
 	dc.l	0
 	dc.l	0
 	dc.l	VBLANK
-	dc.l	HBLANK
+	dc.l	KEYBOARD_TIMER_ROUTINE
 	dc.l	0
 	dc.l	0
 	dc.l	0
