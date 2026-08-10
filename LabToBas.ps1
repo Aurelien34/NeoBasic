@@ -76,6 +76,28 @@ $lineNumbers = for ($i = 0; $i -lt $emittedLines.Count; $i++) { 10 + $i * 10 }
 $labelRefPattern = '(?i)\b(GOTO|GOSUB|THEN|ELSE)\b((?:\s*,?\s*@[A-Za-z_]\w*)+)'
 $atTokenPattern = '@(?<name>[A-Za-z_]\w*)'
 
+# Strips redundant whitespace: leading/trailing padding, runs collapsed to a single
+# space, and any space/tab touching a paren or operator, while leaving whitespace
+# inside string literals and REM comments untouched.
+function Remove-ExtraWhitespace {
+    param([string]$Text)
+
+    if ($Text.Trim() -eq '') { return $Text }
+
+    if ($Text -match '(?i)^\s*REM\b') {
+        return ($Text.Trim() -replace '[ \t]+', ' ')
+    }
+
+    $parts = [regex]::Split($Text, '("[^"]*")')
+    for ($i = 0; $i -lt $parts.Count; $i += 2) {
+        $segment = $parts[$i] -replace '[ \t]+', ' '
+        $segment = $segment -replace '[ \t]*(<=|>=|<>|=|\+|-|\*|/|\(|\))[ \t]*', '$1'
+        $parts[$i] = $segment
+    }
+
+    return (-join $parts).Trim()
+}
+
 $resultLines = New-Object System.Collections.Generic.List[string]
 
 for ($i = 0; $i -lt $emittedLines.Count; $i++) {
@@ -111,10 +133,7 @@ for ($i = 0; $i -lt $emittedLines.Count; $i++) {
         throw $inner.Message
     }
 
-    if ($resolved -match '(?i)^\s*REM\b') {
-        # Normalize a leading REM so removing a label prefix doesn't leave extra spacing.
-        $resolved = $resolved.TrimStart()
-    }
+    $resolved = Remove-ExtraWhitespace $resolved
 
     if ($resolved -eq '') {
         $resultLines.Add("$currentLineNumber")
