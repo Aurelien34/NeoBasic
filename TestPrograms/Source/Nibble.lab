@@ -1,0 +1,138 @@
+REM ==== Nibble - the number-eating worm ====
+ROM == IA partially generated code ==
+
+REM disable the terminal auto-wrap: TPos (internal column counter) is not
+REM synced with LOCATE, so without this, printing 37 characters anywhere
+REM on screen forces a stray CR/LF that scrambles our own cursor placement.
+WIDTH 0
+
+REM DIM must run exactly once: calling it again on a replay would trigger a
+REM "double dimension" error, so it lives outside the restart loop below.
+SZ = 1000
+DIM XA(SZ-1),YA(SZ-1),OC(36,27)
+XL = 1 : XR = 35 : YT = 2 : YB = 26
+HS = 0
+
+@Title:
+CLS
+COLOR 15
+LOCATE 12,10 : PRINT "N I B B L E";
+LOCATE 4,13 : PRINT "Eat the numbers to grow!";
+LOCATE 9,16 : PRINT "Press START";
+LOCATE 12,18 : PRINT "Best: ";HS;
+
+@WaitStart:
+IF SSTART(0) = 0 THEN GOTO @WaitStart
+
+@Restart:
+CLS
+
+REM ---- setup ----
+OV = 0 : SC = 0 : PG = 0 : DX = 1 : DY = 0
+CY = 14
+XA(0) = 16 : YA(0) = CY : XA(1) = 17 : YA(1) = CY : XA(2) = 18 : YA(2) = CY
+TI = 0 : HI = 2 : L = 3 : HX = 18 : HY = CY
+
+REM ---- clear occupancy grid (may hold stale data from a previous game) ----
+FOR I = 0 TO 36
+FOR J = 0 TO 27
+OC(I,J) = 0
+NEXT J
+NEXT I
+OC(XA(0),YA(0)) = 1 : OC(XA(1),YA(1)) = 1 : OC(HX,HY) = 1
+
+REM ---- border ----
+REM the bottom-right cell (X=36,Y=27) is the very last character of the
+REM screen: writing to it scrolls the whole display, so it is left blank.
+COLOR 8
+FOR I = 0 TO 36
+LOCATE I,1 : PRINT "-";
+NEXT I
+FOR I = 0 TO 35
+LOCATE I,27 : PRINT "-";
+NEXT I
+FOR I = 1 TO 27
+LOCATE 0,I : PRINT "l";
+NEXT I
+FOR I = 1 TO 26
+LOCATE 36,I : PRINT "l";
+NEXT I
+COLOR 15 : LOCATE 0,0 : PRINT "SCORE:";SC;"  ";
+
+REM ---- draw initial snake ----
+COLOR 10
+LOCATE XA(0),YA(0) : PRINT "#";
+LOCATE XA(1),YA(1) : PRINT "#";
+COLOR 14 : LOCATE HX,HY : PRINT "@";
+GOSUB @SpawnFood
+
+@MainLoop:
+REM ---- read input, block direct reversal ----
+ST = STICK(0)
+IF ((ST AND 1)<>0) AND (DY<>1) THEN DX=0 : DY=-1
+IF ((ST AND 2)<>0) AND (DY<>-1) THEN DX=0 : DY=1
+IF ((ST AND 4)<>0) AND (DX<>1) THEN DX=-1 : DY=0
+IF ((ST AND 8)<>0) AND (DX<>-1) THEN DX=1 : DY=0
+NX = HX+DX : NY = HY+DY
+
+REM ---- wall collision ----
+IF (NX<XL) OR (NX>XR) OR (NY<YT) OR (NY>YB) THEN OV=1 : GOTO @GameOver
+
+REM ---- self collision check (O(1) via occupancy grid) ----
+IF OC(NX,NY)<>0 THEN OV=1 : GOTO @GameOver
+
+REM ---- eat food ----
+EA = 0 : IF (NX=FX) AND (NY=FY) THEN EA=1
+IF EA=1 THEN SC=SC+FV : PG=PG+FV : GOSUB @SpawnFood
+
+REM ---- advance head ----
+HI = HI+1 : IF HI>=SZ THEN HI=HI-SZ
+XA(HI) = NX : YA(HI) = NY
+OC(NX,NY) = 1
+COLOR 10 : LOCATE HX,HY : PRINT "o";
+COLOR 14 : LOCATE NX,NY : PRINT "O";
+HX = NX : HY = NY : L = L+1
+
+REM ---- advance tail unless growing ----
+IF PG>0 THEN PG=PG-1 : GOTO @SkipTailRemoval
+LOCATE XA(TI),YA(TI) : PRINT " ";
+OC(XA(TI),YA(TI)) = 0
+TI = TI+1 : IF TI>=SZ THEN TI=TI-SZ
+L = L-1
+
+@SkipTailRemoval:
+COLOR 15 : LOCATE 6,0 : PRINT SC;"  ";
+FOR D = 1 TO 150 : NEXT D
+GOTO @MainLoop
+
+@GameOver:
+COLOR 12
+LOCATE 13,13 : PRINT "GAME OVER";
+COLOR 15 : LOCATE 11,15 : PRINT "SCORE: ";SC;
+
+REM keep the previous record for display, then update it if beaten
+OB = HS
+NB = 0
+IF SC > HS THEN HS=SC : NB=1
+LOCATE 12,16 : PRINT "Best: ";OB;
+
+IF NB = 1 THEN COLOR 14 : LOCATE 9,17 : PRINT "NEW BEST SCORE!";
+
+COLOR 15 : LOCATE 9,19 : PRINT "Press START";
+
+@WaitRestart:
+IF SSTART(0) = 0 THEN GOTO @WaitRestart
+
+REM wait for the button to be released, otherwise the same press that got us
+REM here is still down when @WaitStart checks it, skipping the title screen.
+@ReleaseRestart:
+IF SSTART(0) <> 0 THEN GOTO @ReleaseRestart
+GOTO @Title
+
+@SpawnFood: REM ---- spawn food (subroutine, O(1) placement check) ----
+FX = INT(RND(0)*(XR-XL+1)+XL)
+FY = INT(RND(0)*(YB-YT+1)+YT)
+IF OC(FX,FY)<>0 THEN GOTO @SpawnFood
+FV = INT(RND(0)*9+1)
+COLOR 13 : LOCATE FX,FY : PRINT CHR$(FV+48);
+RETURN
