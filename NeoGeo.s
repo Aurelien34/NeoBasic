@@ -53,7 +53,7 @@ SETUP_NEOGEO
 
     ; Setup keyboard watcher timer
     move.w #0,(REG_TIMERHIGH).l
-    move.w #20000,(REG_TIMERLOW).l ; 20000*166.7ns period
+    move.w #4000,(REG_TIMERLOW).l ; 4000*166.7ns period
 	move.w #%0000000011111000,(REG_LSPCMODE).l ; stop animations, enable timer interrupts, autoreset when reaches 0
 
     rts
