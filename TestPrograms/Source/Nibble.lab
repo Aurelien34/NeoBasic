@@ -1,5 +1,5 @@
 REM ==== Nibble - the number-eating worm ====
-ROM == IA partially generated code ==
+REM == IA partially generated code ==
 
 REM disable the terminal auto-wrap: TPos (internal column counter) is not
 REM synced with LOCATE, so without this, printing 37 characters anywhere
@@ -9,7 +9,8 @@ WIDTH 0
 REM DIM must run exactly once: calling it again on a replay would trigger a
 REM "double dimension" error, so it lives outside the restart loop below.
 SZ = 1000
-DIM XA(SZ-1),YA(SZ-1),OC(36,27)
+NF = 3
+DIM XA(SZ-1),YA(SZ-1),OC(36,27),FX(NF-1),FY(NF-1),FV(NF-1)
 XL = 1 : XR = 35 : YT = 2 : YB = 26
 HS = 0
 
@@ -64,7 +65,12 @@ COLOR 10
 LOCATE XA(0),YA(0) : PRINT "#";
 LOCATE XA(1),YA(1) : PRINT "#";
 COLOR 14 : LOCATE HX,HY : PRINT "@";
+
+REM ---- spawn the initial batch of food ----
+FOR K = 0 TO NF-1
+SI = K
 GOSUB @SpawnFood
+NEXT K
 
 @MainLoop:
 REM ---- read input, block direct reversal ----
@@ -81,9 +87,12 @@ IF (NX<XL) OR (NX>XR) OR (NY<YT) OR (NY>YB) THEN OV=1 : GOTO @GameOver
 REM ---- self collision check (O(1) via occupancy grid) ----
 IF OC(NX,NY)<>0 THEN OV=1 : GOTO @GameOver
 
-REM ---- eat food ----
-EA = 0 : IF (NX=FX) AND (NY=FY) THEN EA=1
-IF EA=1 THEN SC=SC+FV : PG=PG+FV : GOSUB @SpawnFood
+REM ---- check food (before moving, so we know whether to grow) ----
+REM SI ends up holding the index of the eaten slot, -1 if none matched
+EA = 0 : SI = -1
+FOR K = 0 TO NF-1
+IF (NX=FX(K)) AND (NY=FY(K)) THEN EA=1 : SI=K
+NEXT K
 
 REM ---- advance head ----
 HI = HI+1 : IF HI>=SZ THEN HI=HI-SZ
@@ -92,6 +101,12 @@ OC(NX,NY) = 1
 COLOR 10 : LOCATE HX,HY : PRINT "o";
 COLOR 14 : LOCATE NX,NY : PRINT "O";
 HX = NX : HY = NY : L = L+1
+
+REM ---- eat food: respawn only once the new head cell is marked occupied,
+REM otherwise the new food could randomly land on that very cell and be
+REM drawn then instantly overwritten by the head, invisible from the start.
+REM SI is still the eaten slot, so @SpawnFood refills that same slot. ----
+IF EA=1 THEN SC=SC+FV(SI) : PG=PG+FV(SI) : GOSUB @SpawnFood
 
 REM ---- advance tail unless growing ----
 IF PG>0 THEN PG=PG-1 : GOTO @SkipTailRemoval
@@ -129,10 +144,22 @@ REM here is still down when @WaitStart checks it, skipping the title screen.
 IF SSTART(0) <> 0 THEN GOTO @ReleaseRestart
 GOTO @Title
 
-@SpawnFood: REM ---- spawn food (subroutine, O(1) placement check) ----
-FX = INT(RND(0)*(XR-XL+1)+XL)
-FY = INT(RND(0)*(YB-YT+1)+YT)
-IF OC(FX,FY)<>0 THEN GOTO @SpawnFood
-FV = INT(RND(0)*9+1)
-COLOR 13 : LOCATE FX,FY : PRINT CHR$(FV+48);
+@SpawnFood: REM ---- spawn food into slot SI (subroutine) ----
+REM keep food off the border: spawn one cell inside XL..XR / YT..YB
+FX(SI) = INT(RND(0)*(XR-XL-1)+XL+1)
+FY(SI) = INT(RND(0)*(YB-YT-1)+YT+1)
+IF OC(FX(SI),FY(SI))<>0 THEN GOTO @SpawnFood
+
+REM also avoid the other active food slots so two foods never overlap.
+REM Uses J, not K: @SpawnFood can be GOSUB'd while an outer "FOR K" loop
+REM (the initial spawn batch) is still open, and nesting a second FOR K
+REM inside it would push a second frame for the same loop variable.
+FC = 0
+FOR J = 0 TO NF-1
+IF (J<>SI) AND (FX(J)=FX(SI)) AND (FY(J)=FY(SI)) THEN FC=1
+NEXT J
+IF FC=1 THEN GOTO @SpawnFood
+
+FV(SI) = INT(RND(0)*9+1)
+COLOR 13 : LOCATE FX(SI),FY(SI) : PRINT CHR$(FV(SI)+48);
 RETURN
