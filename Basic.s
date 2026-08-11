@@ -90,24 +90,13 @@ HW_VECTORS
 
 	SECTION	text,code		* linked via Basic.ld into the ROM region
 
-* TRAP #15 handler - dispatches on the function code in d0 (console/file I/O).
-* fn 5, 6, 7 and 12 are stubbed below, fill in the bodies for the real
-* hardware. everything else (fn 50-55, file LOAD/SAVE) isn't implemented yet
-* and falls through to HW_TRAP15_UNKNOWN (safe halt)
+* TRAP #15 handler - dispatches on the function code in d0 (file I/O only;
+* console I/O now calls IO_GETBYTE/IO_PUTBYTE/IO_STATUS directly via JSR,
+* see VEC_OUT/VEC_IN/RETCHR below). fn 12 is stubbed below, fill in the body
+* for the real hardware. everything else (fn 50-55, file LOAD/SAVE) isn't
+* implemented yet and falls through to HW_TRAP15_UNKNOWN (safe halt)
 
 HW_TRAP15
-	CMP.b		#5,d0				* get byte (blocking)
-	BNE.s .no_getbyte
-	BRA			HW_TRAP15_GETBYTE
-.no_getbyte:	
-	CMP.b		#6,d0				* character out
-	BNE.s .no_putbyte
-	BRA		HW_TRAP15_PUTBYTE
-.no_putbyte:
-	CMP.b		#7,d0				* get status (char waiting?)
-	BNE.s	.no_status
-	BRA		HW_TRAP15_STATUS
-.no_status:
 	CMP.b		#12,d0			* keyboard echo on/off
 	BEQ.s		HW_TRAP15_ECHO
 
@@ -126,8 +115,7 @@ HW_TRAP15_ECHO
 VEC_OUT
 	MOVEM.l	d0-d1,-(sp)			* save d0, d1
 	MOVE.b	d0,d1				* copy character
-	MOVEQ		#6,d0				* character out
-	TRAP		#15				* do I/O function
+	JSR		IO_PUTBYTE			* do I/O function
 	MOVEM.l	(sp)+,d0-d1			* restore d0, d1
 	RTS
 
@@ -136,8 +124,7 @@ VEC_OUT
 
 VEC_IN
 	MOVE.l	d1,-(sp)			* save d1
-	MOVEQ		#7,d0				* get status
-	TRAP		#15				* do I/O function
+	JSR		IO_STATUS			* do I/O function
 	MOVE.b	d1,d0				* copy status
 	BNE.s		RETCHR			* branch if character waiting
 
@@ -148,8 +135,7 @@ VEC_IN
 	RTS
 
 RETCHR
-	MOVEQ		#5,d0				* get byte
-	TRAP		#15				* do I/O function
+	JSR		IO_GETBYTE			* do I/O function
 	MOVE.b	d1,d0				* copy byte
 	MOVE.l	(sp)+,d1			* restore d1
 	ORI.b		#$00,d0			* set z flag on received byte

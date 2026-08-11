@@ -4,7 +4,7 @@
 
     global ON_RESET_NEOGEO, SETUP_NEOGEO
     global VBLANK, KEYBOARD_TIMER_ROUTINE
-	global HW_TRAP15_GETBYTE, HW_TRAP15_PUTBYTE, HW_TRAP15_STATUS
+	global IO_GETBYTE, IO_PUTBYTE, IO_STATUS
 	global fix_layer_cls, fix_locate_cursor_position
 	global BasicNeo_cursor_blink_start, BasicNeo_cursor_blink_loop, BasicNeo_cursor_blink_stop
 
@@ -156,8 +156,8 @@ KEYBOARD_TIMER_ROUTINE
 	move.w (sp)+,d0
 	rte
 
-* fn 5 - get byte (blocking). return: d1.b = character received
-HW_TRAP15_GETBYTE
+* get byte (blocking). return: d1.b = character received
+IO_GETBYTE
 	movem.l d0/a0,-(sp)
 	; Wait for a key to be pressed
 .wait_for_key
@@ -182,33 +182,33 @@ HW_TRAP15_GETBYTE
 
 	movem.l (sp)+,d0/a0
 
-	RTE
+	RTS
 
-* fn 6 - character out. in: d1.b = character to send
-HW_TRAP15_PUTBYTE
+* character out. in: d1.b = character to send
+IO_PUTBYTE
 
 	cmp.b #0,d1
 	bne .continue
-	rte
+	rts
 
 .continue
 	move.b d1,d0
 	;jsr put_byte_to_briconeo_terminal
 	jsr put_byte_to_fix_layer
 
-	RTE
+	RTS
 
-* fn 7 - get status (non blocking). return: d1.b = 0 if none waiting, <>0 if
+* get status (non blocking). return: d1.b = 0 if none waiting, <>0 if
 * a character is waiting
-HW_TRAP15_STATUS
+IO_STATUS
 
 	cmp.w #0,KeyboardQueueLength(a3)
 	beq .nochar
 	move.b #1,d1
-	RTE
+	RTS
 .nochar
 	move.b #0,d1
-	RTE
+	RTS
 
 
 init_palette:
