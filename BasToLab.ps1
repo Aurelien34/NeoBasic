@@ -31,10 +31,14 @@ $linePattern = '^(?<num>\d+)(?: (?<rest>.*))?$'
 $numbers = New-Object System.Collections.Generic.List[int]
 $contents = New-Object System.Collections.Generic.List[string]
 $lineIndex = @{}
+$entries = New-Object System.Collections.Generic.List[psobject]
 
 for ($i = 0; $i -lt $sourceLines.Count; $i++) {
     $line = $sourceLines[$i]
-    if ($line.Trim() -eq '') { continue }
+    if ($line.Trim() -eq '') {
+        $entries.Add([pscustomobject]@{ Type = 'Blank' })
+        continue
+    }
 
     $match = [regex]::Match($line, $linePattern)
     if (-not $match.Success) {
@@ -49,10 +53,11 @@ for ($i = 0; $i -lt $sourceLines.Count; $i++) {
     $lineIndex[$num] = $numbers.Count
     $numbers.Add($num)
     $contents.Add($match.Groups['rest'].Value)
+    $entries.Add([pscustomobject]@{ Type = 'Line'; Index = $numbers.Count - 1 })
 }
 
-# First pass: find every line number referenced after GOTO / GOSUB / THEN / ELSE.
-$jumpRefPattern = '(?i)\b(GOTO|GOSUB|THEN|ELSE)\b((?:\s*,?\s*\d+)+)'
+# First pass: find every line number referenced after GOTO / GOSUB / THEN / ELSE / RESTORE.
+$jumpRefPattern = '(?i)\b(GOTO|GOSUB|THEN|ELSE|RESTORE)\b((?:\s*,?\s*\d+)+)'
 $numTokenPattern = '\d+'
 
 $targets = New-Object System.Collections.Generic.HashSet[int]
@@ -79,9 +84,14 @@ foreach ($target in $targets) {
 # Second pass: rewrite jump targets to label references and drop line numbers.
 $resultLines = New-Object System.Collections.Generic.List[string]
 
-for ($i = 0; $i -lt $numbers.Count; $i++) {
-    $num = $numbers[$i]
-    $content = $contents[$i]
+foreach ($entry in $entries) {
+    if ($entry.Type -eq 'Blank') {
+        $resultLines.Add('REM')
+        continue
+    }
+
+    $num = $numbers[$entry.Index]
+    $content = $contents[$entry.Index]
 
     $refEvaluator = [System.Text.RegularExpressions.MatchEvaluator]{
         param($m)

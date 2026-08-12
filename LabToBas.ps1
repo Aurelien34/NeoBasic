@@ -58,7 +58,10 @@ for ($i = 0; $i -lt $sourceLines.Count; $i++) {
             $emittedLines.Add($rest)
         }
     }
-    elseif ($line.Trim() -ne '') {
+    elseif ($line.Trim() -eq '') {
+        $emittedLines.Add('REM')
+    }
+    else {
         $emittedLines.Add($line)
     }
 }
@@ -72,8 +75,8 @@ foreach ($name in $labelTarget.Keys) {
 # Assign line numbers: 10, 20, 30, ...
 $lineNumbers = for ($i = 0; $i -lt $emittedLines.Count; $i++) { 10 + $i * 10 }
 
-# Second pass: resolve @label references that follow GOTO / GOSUB / THEN / ELSE.
-$labelRefPattern = '(?i)\b(GOTO|GOSUB|THEN|ELSE)\b((?:\s*,?\s*@[A-Za-z_]\w*)+)'
+# Second pass: resolve @label references that follow GOTO / GOSUB / THEN / ELSE / RESTORE.
+$labelRefPattern = '(?i)\b(GOTO|GOSUB|THEN|ELSE|RESTORE)\b((?:\s*,?\s*@[A-Za-z_]\w*)+)'
 $atTokenPattern = '@(?<name>[A-Za-z_]\w*)'
 
 # Strips redundant whitespace: leading/trailing padding, runs collapsed to a single
