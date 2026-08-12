@@ -43,6 +43,9 @@ SETUP_NEOGEO
 	jsr init_palette
 	move.w #$f000,CurrentColorMask(a3)
 
+	; Clear sprites RAM
+	jsr sprites_cls
+
 	; Fix layer intialization
 	jsr fix_layer_cls
 	jsr fix_layer_show_snk
@@ -503,3 +506,50 @@ BasicNeo_cursor_blink_stop:
 	
 	move (sp)+,d0
 	rts
+
+sprites_cls:
+clear_sprites:
+    move.w #$8000,REG_VRAMADD
+    clr.w d0
+    Nop4
+    move.w #1,REG_VRAMMOD
+    move.w #381-1,d7
+.loop1:
+    Nop4
+    move.w d0,REG_VRAMRW
+    dbra.w d7,.loop1
+
+    Nop4
+    move.w #$8200,REG_VRAMADD
+    move.w #0,d0
+    Nop4
+    move.w #1,REG_VRAMMOD
+    move.w #381-1,d7
+.loop2:
+    Nop4
+    move.w d0,REG_VRAMRW
+    dbra.w d7,.loop2
+
+    Nop4
+    move.w #$8400,REG_VRAMADD
+    move.w #400,d0
+    Nop4
+    move.w #1,REG_VRAMMOD
+    move.w #381-1,d7
+.loop3:
+    Nop4
+    move.w d0,REG_VRAMRW
+    dbra.w d7,.loop3
+    
+    Nop4
+    move.w #$0000,REG_VRAMADD
+    move.w #0,d0
+    Nop4
+    move.w #1,REG_VRAMMOD
+    move.w #$7000-1,d7
+.loop4:
+    Nop4
+    move.w d0,REG_VRAMRW
+    dbra.w d7,.loop4
+
+    rts
