@@ -16,11 +16,10 @@ else
 	RM_CMD = rm -f
 endif
 
+rom: Basic.bin
 
 run: Basic.bin
 	copy Basic.bin E:
-
-rom: Basic.bin
 
 bas: $(BASPATH) $(BAS_OUT)
 
