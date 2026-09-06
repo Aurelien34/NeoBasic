@@ -142,7 +142,13 @@ RETCHR
 	ORI.b		#1,CCR			* set carry, flag we got a byte
 	RTS
 
-* LOAD routine for the Easy68k simulator
+* ROM filesystem: LOAD/SAVE/FILES support. Searches the allocation table
+* built by MakeFileSystem.ps1 from Programs.txt - see FileSystem.gen.s.
+
+FSB_QUIET	EQU	0			* fs_flags bit: suppress echo/cursor while streaming
+FSB_AUTORUN	EQU	1			* fs_flags bit: chain a "RUN" once the load completes
+
+* perform LOAD "name"[,R]
 
 VEC_LD
 	SUBQ.w	#1,a5				* decrement execute pointer
@@ -150,192 +156,320 @@ VEC_LD
 	TST.b		Dtypef(a3)			* test data type flag
 	BPL		LAB_TMER			* if type is not string do type mismatch error
 
-	BSR		LAB_22B6			* pop string off descriptor stack or from memory
-							* returns with d0 = length, a0 = pointer
-	BEQ		LAB_FCER			* if null do function call error then warm start
-
-	MOVEA.l	a0,a1				* copy filename pointer
-	ADDA.w	d0,a0				* add length to find end of string
-	MOVE.b	(a0),-(sp)			* save byte
-	MOVE.l	a0,-(sp)			* save address
-	MOVEQ		#0,d0				* set for null
-	MOVE.b	d0,(a0)			* null terminate string
-	MOVE		#51,d0			* open existing file
-	TRAP		#15				* do I/O function
-	TST.w		d0				* test load result
-	BNE		LOAD_exit			* if error clear up and exit
-
-	MOVE.l	d1,file_id(a3)		* save file ID
-	LEA		file_byte(a3),a1		* point to byte buffer
-	MOVEQ		#1,d2				* set byte count
-	MOVEQ		#53,d0			* read first byte from file
-	TRAP		#15				* do I/O function
-
-	TST.w		d0				* test status
-	BNE		LOAD_close			* if error close files & exit
-
-	MOVEQ		#0,d2				* file position
-	MOVEQ		#55,d0			* reset file position
-	TRAP		#15				* do I/O function
-
-	MOVE.b	(a1),d0			* get first file byte
-	BNE		LOAD_ascii			* if first byte not $00 go do ASCII load
-
-							* do binary load
-	MOVEA.l	Smeml(a3),a1		* get start of program memory
-	MOVE.w	#$7FFF,d2			* set to $7FFF (max read length)
-	MOVEQ		#53,d0			* read from file
-	TRAP		#15				* do I/O function
-
-	ADD.l		a1,d2				* add start of memory to loaded program length
-	MOVE.l	d2,Sfncl(a3)		* save end of program
-
-LOAD_close
-	MOVEQ		#50,d0			* close all files
-	TRAP		#15				* do I/O function
-
-LOAD_exit
-	MOVEA.l	(sp)+,a0			* get string end back
-	MOVE.b	(sp)+,(a0)			* put byte back
-	BSR		LAB_147A			* go do "CLEAR"
-	BRA		LAB_1274			* BASIC warm start entry, go wait for Basic
-							* command
-
-* is ASCII file so just change the input vector
-
-LOAD_ascii
-	LEA		(LOAD_in,PC),a1		* get byte from file vector
-	MOVE.l	a1,V_INPTv(a3)		* set input vector
-	MOVEA.l	(sp)+,a0			* get string end back
-	MOVE.b	(sp)+,(a0)			* put byte back
-	BRA		LAB_127D			* now we just wait for Basic command, no "Ready"
-
-* input character to register d0 from file
-
-
-LOAD_in
-	MOVEM.l	d1-d2/a1,-(sp)		* save d1, d2 & a1
-	MOVE.l	file_id(a3),d1		* get file ID back
-	LEA		file_byte(a3),a1		* point to byte buffer
-	MOVEQ		#1,d2				* set count for one byte
-	MOVEQ		#53,d0			* read from file
-	TRAP		#15				* do I/O function
-
-	TST.w		d0				* test status
-	BNE		LOAD_eof			* branch if byte read failed
-
-	MOVE.b	(a1),d0			* get byte
-	MOVEM.l	(sp)+,d1-d2/a1		* restore d1, d2 & a1
-	ORI.b		#1,CCR			* set carry, flag we got a byte
-	RTS
-							* got an error on read so restore the input
-							* vector and tidy up
-LOAD_eof
-	MOVEQ		#50,d0			* close all files
-	TRAP		#15				* do I/O function
-
-	LEA		(VEC_IN,PC),a1		* get byte from input device vector
-	MOVE.l	a1,V_INPTv(a3)		* set input vector
-	MOVEQ		#0,d0				* clear byte
-	MOVEM.l	(sp)+,d1-d2/a1		* restore d1, d2 & a1
-	BSR		LAB_147A			* do CLEAR, erase variables/functions and
-							* flush stacks
-	BRA		LAB_1274			* BASIC warm start entry, go wait for Basic
-							* command
-
-* SAVE routine for the Easy68k simulator
-
-VEC_SV
-	SUBQ.w	#1,a5				* decrement execute pointer
-	BSR		LAB_GVAL			* get value from line
-	TST.b		Dtypef(a3)			* test data type flag
-	BPL		LAB_TMER			* if type is not string do type mismatch error
-
 	BSR		LAB_GBYT			* get next BASIC byte
-	BEQ		SAVE_bas			* branch if no following
+	BEQ		FS_LD_noflag		* branch if no following byte, plain LOAD
 
 	CMP.b		#',',d0			* compare with ","
 	BNE		LAB_SNER			* not "," so go do syntax error/warm start
 
 	BSR		LAB_IGBY			* increment & scan memory
 	ORI.b		#$20,d0			* ensure lower case
-	CMP.b		#'a',d0			* compare with "a"
-	BNE		LAB_SNER			* not "a" so go do syntax error/warm start
+	CMP.b		#'r',d0			* compare with "r"
+	BNE		LAB_SNER			* not "r" so go do syntax error/warm start
+
+	BSR		LAB_IGBY			* step past the R
+	MOVEQ		#1,d0				* remember to chain RUN once loaded
+	BRA		FS_LD_pushflag
+
+FS_LD_noflag
+	MOVEQ		#0,d0
+
+FS_LD_pushflag
+	MOVE.l	d0,-(sp)			* stack: run-flag (survives the calls below)
 
 	BSR		LAB_22B6			* pop string off descriptor stack or from memory
 							* returns with d0 = length, a0 = pointer
 	BEQ		LAB_FCER			* if null do function call error then warm start
+							* (run-flag left on stack, LAB_1491 discards it)
 
-	MOVEA.l	a0,a1				* copy filename pointer
-	ADDA.w	d0,a0				* add length to find end of string
-	MOVE.b	(a0),-(sp)			* save byte
-	MOVE.l	a0,-(sp)			* save address
-	MOVEQ		#0,d0				* set for null
-	MOVE.b	d0,(a0)			* null terminate string
-	MOVE		#52,d0			* open new file
-	TRAP		#15				* do I/O function
-	TST.w		d0				* test save result
-	BNE		SAVE_exit			* if error clear up and exit
+	BSR		FS_FIND			* a0/d0 name -> found: a0=data ptr, d0=length
+	BEQ		FS_LD_notfound		* not found: d0 = 0
 
-	MOVE.l	d1,file_id(a3)		* save file ID
+	BSR		FS_OPEN			* arm fs_ptr/fs_end, install FS_IN, set QUIET
+							* (consumes a0/d0 - nothing left to carry across
+							* the "NEW" below)
 
-	MOVE.l	V_OUTPv(a3),-(sp)		* save the output vector
-	LEA		(SAVE_OUT,PC),a1		* send byte to file vector
-	MOVE.l	a1,V_OUTPv(a3)		* change output vector
+	MOVE.l	(sp)+,d1			* recover the run-flag - MUST happen before
+							* "NEW" below: LAB_1463 falls into LAB_1491,
+							* which flushes the entire stack down to
+							* ram_base(a3), discarding anything we might
+							* still have stacked beneath its return address
+	BEQ		FS_LD_norun
+	BSET.b	#FSB_AUTORUN,fs_flags(a3)	* chain "RUN" once FS_EOF is reached
 
-	BSR		LAB_IGBY			* increment & scan memory
-	BSR		LAB_LIST			* go do list (line numbers applicable)
+FS_LD_norun
+	BSR		LAB_1463			* do "NEW" - clear program, vars, arrays, strings
+	BRA		LAB_127D			* wait for Basic command, no "Ready"
+							* (the loaded text streams in first via V_INPT)
 
-	MOVE.l	(sp)+,V_OUTPv(a3)		* restore the output vector
-	BRA		SAVE_close
+FS_LD_notfound
+	MOVEQ		#$2C,d7			* error code $2C "File not found"
+	BRA		LAB_XERR
 
-SAVE_bas
-	BSR		LAB_22B6			* pop string off descriptor stack or from memory
-							* returns with d0 = length, a0 = pointer
-	BEQ		LAB_FCER			* if null do Function call error then warm start
+* perform SAVE - the ROM filesystem is read only
 
-	MOVEA.l	a0,a1				* copy filename pointer
-	ADDA.w	d0,a0				* add length to find end of string
-	MOVE.b	(a0),-(sp)			* save byte
-	MOVE.l	a0,-(sp)			* save address
-	MOVEQ		#0,d0				* set for null
-	MOVE.b	d0,(a0)			* null terminate string
-	MOVE		#52,d0			* open new file
-	TRAP		#15				* do I/O function
-	TST.w		d0				* test save result
-	BNE		SAVE_exit			* if error clear up and exit
+VEC_SV
+	MOVEQ		#$2E,d7			* error code $2E "Read only"
+	BRA		LAB_XERR
 
-	MOVEA.l	Smeml(a3),a1		* get start of program
-	MOVE.l	Sfncl(a3),d2		* get end of program
-	SUB.l		a1,d2				* subtract start of program (= length)
+* Search the ROM filesystem table for a program by name (case insensitive,
+* names are at most 15 characters). Trashes d1-d4/a1-a2.
+* in:  a0 = name pointer, d0.w = name length
+* out: found    - a0 = program data pointer, d0.l = program length, Z clear
+*      notfound - d0 = 0, Z set
 
-	MOVEQ		#54,d0			* write to file
-	TRAP		#15				* do I/O function
+FS_FIND
+	MOVEM.l	d1-d4/a1-a2,-(sp)
+	MOVE.w	d0,d3				* d3 = name length to match
+	CMPI.w	#16,d3
+	BHI		FS_FIND_none		* longer than any possible entry name
 
-SAVE_close
-	MOVEQ		#50,d0			* close all files
-	TRAP		#15				* do I/O function
+	MOVEA.l	a0,a2				* a2 = name pointer, kept for every entry try
+	LEA		FS_TABLE+8,a1		* a1 -> first entry
+	MOVEQ		#0,d2
+	MOVE.w	FS_TABLE+6,d2		* d2 = number of entries left to check
 
-SAVE_exit
-	MOVEA.l	(sp)+,a0			* get string end back
-	MOVE.b	(sp)+,(a0)			* put byte back
-	TST.w		d0				* test save result
-	BNE		LAB_FCER			* if error do function call error, warm start
+FS_FIND_entry
+	TST.w		d2
+	BEQ		FS_FIND_none
 
+	MOVEQ		#0,d1				* d1 = character index, 0..15
+FS_FIND_char
+	CMP.w		d1,d3
+	BHI		FS_FIND_have		* index < name length, compare a real character
+
+	TST.b		(a1,d1.w)			* index >= name length: entry byte must be
+	BNE		FS_FIND_nextentry	* the $00 pad, else the entry name is longer
+	BRA		FS_FIND_charok
+
+FS_FIND_have
+	MOVE.b	(a2,d1.w),d4
+	MOVE.b	d4,d0
+	BSR		FS_UPPER
+	MOVE.b	d0,d4
+	MOVE.b	(a1,d1.w),d0
+	BSR		FS_UPPER
+	CMP.b		d4,d0
+	BNE		FS_FIND_nextentry
+
+FS_FIND_charok
+	ADDQ.w	#1,d1
+	CMPI.w	#16,d1
+	BNE		FS_FIND_char
+
+	MOVE.l	16(a1),a0			* found: data pointer
+	MOVE.l	20(a1),d0			* found: data length
+	MOVEM.l	(sp)+,d1-d4/a1-a2
+	TST.l		d0
 	RTS
 
-* output character to file from register d0
+FS_FIND_nextentry
+	ADDA.w	#24,a1
+	SUBQ.w	#1,d2
+	BRA		FS_FIND_entry
 
-SAVE_OUT
-	MOVEM.l	d0-d2/a1,-(sp)		* save d0, d1, d2 & a1
-	MOVE.l	file_id(a3),d1		* get file ID back
-	LEA		file_byte(a3),a1		* point to byte buffer
-	MOVE.b	d0,(a1)			* save byte
-	MOVEQ		#1,d2				* set byte count
-	MOVEQ		#54,d0			* write to file
-	TRAP		#15				* do I/O function
-	MOVEM.l	(sp)+,d0-d2/a1		* restore d0, d1, d2 & a1
+FS_FIND_none
+	MOVEQ		#0,d0
+	MOVEM.l	(sp)+,d1-d4/a1-a2
+	TST.l		d0
 	RTS
+
+* Uppercase an ASCII letter. in/out: d0.b, no other register touched.
+
+FS_UPPER
+	CMPI.b	#'a',d0
+	BCS		FS_UPPER_done
+	CMPI.b	#'z',d0
+	BHI		FS_UPPER_done
+	SUB.b		#$20,d0
+FS_UPPER_done
+	RTS
+
+* Start streaming a ROM program in through the input vector, exactly as if
+* it were being typed at the keyboard (see FS_IN). Silences echo/cursor
+* until FS_EOF restores the keyboard vector.
+* in: a0 = data pointer, d0.l = data length
+
+FS_OPEN
+	MOVE.l	a0,fs_ptr(a3)
+	ADD.l		d0,a0
+	MOVE.l	a0,fs_end(a3)
+	MOVEQ		#0,d0
+	MOVE.b	d0,fs_flags(a3)
+	BSET.b	#FSB_QUIET,fs_flags(a3)
+	LEA		(FS_IN,PC),a1
+	MOVE.l	a1,V_INPTv(a3)
+	RTS
+
+* Input vector while a ROM program is streaming in (see FS_OPEN). Never
+* reports "no character available" - the ROM data is always ready. At the
+* end of the data, control passes directly to FS_EOF instead of returning,
+* exactly like the original EhBASIC file LOAD did.
+* Must not disturb a0/d1 - LAB_1357's line collector keeps live state there
+* across every call to the input vector.
+
+FS_IN
+	MOVEA.l	fs_ptr(a3),a1
+	CMPA.l	fs_end(a3),a1
+	BEQ		FS_EOF
+	MOVE.b	(a1)+,d0
+	MOVE.l	a1,fs_ptr(a3)
+	ORI.b		#1,CCR			* set carry, flag we got a byte
+	RTS
+
+* Reached the end of a ROM program while streaming it into memory. Restore
+* the keyboard input vector, do the equivalent of CLEAR, and either wait for
+* a command or, if the load was started as LOAD "x",R or was the AUTO boot
+* program, feed a synthetic "RUN" through the input vector next.
+
+FS_EOF
+	BTST.b	#FSB_AUTORUN,fs_flags(a3)
+	BNE		FS_EOF_autorun
+
+	LEA		(VEC_IN,PC),a1
+	MOVE.l	a1,V_INPTv(a3)
+	MOVEQ		#0,d0
+	MOVE.b	d0,fs_flags(a3)		* clear QUIET too, the load is fully over
+	BSR		LAB_147A			* do "CLEAR"
+	BRA		LAB_1274			* print "Ready" and wait for a command
+
+FS_EOF_autorun
+	BCLR.b	#FSB_AUTORUN,fs_flags(a3)	* one shot, don't chain again next LOAD
+	LEA		(FS_RUN_IN,PC),a1
+	MOVE.l	a1,V_INPTv(a3)
+	LEA		(FS_RUN_TEXT,PC),a0
+	MOVE.l	a0,fs_ptr(a3)
+	LEA		(FS_RUN_TEXT_END,PC),a0
+	MOVE.l	a0,fs_end(a3)
+	BSR		LAB_147A			* do "CLEAR"
+	BRA		LAB_127D			* wait for a command; feeds "RUN" next
+
+FS_RUN_TEXT
+	dc.b		'RUN',$0D
+FS_RUN_TEXT_END
+
+* Input vector that feeds a synthetic "RUN"<CR> after an autorun load (see
+* FS_EOF_autorun), then falls back to the keyboard vector.
+* Restores the keyboard vector and clears QUIET as soon as the CR is handed
+* off, not on some later call: RUN starts executing synchronously right
+* after, and a program with no INPUT/keyboard poll of its own (e.g. a game
+* loop) may never call V_INPT again to do this cleanup for us, which would
+* leave the screen silenced forever.
+
+FS_RUN_IN
+	MOVEA.l	fs_ptr(a3),a1
+	CMPA.l	fs_end(a3),a1
+	BEQ		FS_RUN_IN_done
+
+	MOVE.b	(a1)+,d0
+	MOVE.l	a1,fs_ptr(a3)
+	CMPA.l	fs_end(a3),a1
+	BNE		FS_RUN_IN_more
+
+	LEA		(VEC_IN,PC),a1
+	MOVE.l	a1,V_INPTv(a3)
+	BCLR.b	#FSB_QUIET,fs_flags(a3)
+	TST.b		d0				* BCLR set Z from the flag bit, restore it from d0
+
+FS_RUN_IN_more
+	ORI.b		#1,CCR
+	RTS
+
+FS_RUN_IN_done
+	LEA		(VEC_IN,PC),a1
+	MOVE.l	a1,V_INPTv(a3)
+	MOVEQ		#0,d0
+	MOVE.b	d0,fs_flags(a3)
+	RTS
+
+* Called once at cold start, just before "Ready". If START is held on pad 1
+* the autorun is skipped entirely (escape hatch for machines without a
+* keyboard). Otherwise, if a program named AUTO exists in the ROM
+* filesystem, it is loaded and chained into RUN - see FS_EOF_autorun.
+
+FS_AUTOSTART
+	MOVEQ		#0,d0
+	JSR		Extension_SSTART		* d0 = 1 if START (player 1) is held
+	TST.b		d0
+	BNE		FS_AUTOSTART_skip
+
+	LEA		(FS_AUTO_NAME,PC),a0
+	MOVEQ		#4,d0
+	BSR		FS_FIND
+	BEQ		FS_AUTOSTART_skip
+
+	BSR		FS_OPEN
+	BSET.b	#FSB_AUTORUN,fs_flags(a3)
+	BRA		LAB_127D			* stream the AUTO program in, then chain RUN
+
+FS_AUTOSTART_skip
+	RTS
+
+FS_AUTO_NAME
+	dc.b		'AUTO'
+
+* perform FILES: list every program stored in the ROM filesystem
+
+LAB_FILES
+	LEA		(LAB_FMSG1,PC),a0
+	BSR		LAB_18C3
+
+	LEA		FS_TABLE+8,a1
+	MOVEQ		#0,d2
+	MOVE.w	FS_TABLE+6,d2		* d2 = entries left
+	MOVEQ		#0,d3				* d3 = programs printed
+
+	MOVE.l	a1,-(sp)			* [8(sp)] current entry pointer
+	MOVE.l	d2,-(sp)			* [4(sp)] entries remaining
+	MOVE.l	d3,-(sp)			* [0(sp)] programs printed
+
+FS_FILES_loop
+	MOVE.l	4(sp),d2
+	TST.w		d2
+	BEQ		FS_FILES_done
+
+	MOVEA.l	8(sp),a0
+	BSR		LAB_18C3			* print the (null padded) name
+
+	MOVEQ		#' ',d0
+	BSR		LAB_PRNA
+	MOVEQ		#' ',d0
+	BSR		LAB_PRNA
+
+	MOVEA.l	8(sp),a1
+	MOVE.l	20(a1),d0
+	BSR		LAB_295E			* print the size
+
+	BSR		LAB_CRLF
+
+	MOVEA.l	8(sp),a1
+	ADDA.w	#24,a1
+	MOVE.l	a1,8(sp)
+
+	MOVE.l	4(sp),d2
+	SUBQ.w	#1,d2
+	MOVE.l	d2,4(sp)
+
+	MOVE.l	(sp),d3
+	ADDQ.w	#1,d3
+	MOVE.l	d3,(sp)
+
+	BRA		FS_FILES_loop
+
+FS_FILES_done
+	MOVE.l	(sp)+,d3
+	ADDA.w	#8,sp
+
+	MOVE.l	d3,d0
+	BSR		LAB_295E			* print the count
+	LEA		(LAB_FMSG2,PC),a0
+	BSR		LAB_18C3
+	RTS
+
+LAB_FMSG1
+	dc.b		$0D,$0A,$00
+LAB_FMSG2
+	dc.b		' programs',$0D,$0A,$00
 
 ****************************************************************************************
 ****************************************************************************************
@@ -431,6 +565,11 @@ LAB_sizok
 	MOVE.b	d0,Nullct(a3)		* default NULL count
 	MOVE.b	d0,TPos(a3)			* clear terminal position
 	MOVE.b	d0,ccflag(a3)		* allow CTRL-C check
+	MOVE.b	d0,fs_flags(a3)		* RAM powers up as garbage, not zero - if a
+							* stray QUIET bit stuck set here, LAB_PRNA
+							* would suppress all output forever whenever
+							* FS_AUTOSTART never happens to call FS_OPEN
+							* (no AUTO program in the ROM filesystem)
 	MOVE.b  #NEOBASIC_INITIAL_POSITION_X,CursorX(a3)		* default cursor X position
 	MOVE.b  #NEOBASIC_INITIAL_POSITION_Y,CursorY(a3)		* default cursor Y position
 
@@ -465,6 +604,7 @@ LAB_sizok
 	LEA		(LAB_1274,PC),a0		* get warm start vector
 	MOVE.l	a0,Wrmjpv(a3)		* set warm start vector
 	BSR		LAB_RND			* initialise
+	BSR		FS_AUTOSTART		* try to auto-load/run "AUTO" unless START is held
 	JMP		LAB_WARM(a3)		* go do warm start
 
 * do address error
@@ -790,15 +930,24 @@ LAB_1357
 	LEA		Ibuffs(a3),a0		* set buffer base pointer
 
 LAB_1359
+	BTST.b	#FSB_QUIET,fs_flags(a3)	* no cursor while a ROM program streams in
+	BNE.s	.noBlinkStart
 	JSR 	BasicNeo_cursor_blink_start
+.noBlinkStart:
 .cursorLoop:
+	BTST.b	#FSB_QUIET,fs_flags(a3)
+	BNE.s	.noBlinkLoop
 	JSR		BasicNeo_cursor_blink_loop
+.noBlinkLoop:
 	JSR		V_INPT(a3)			* call scan input device
 	BCC.s	.cursorLoop			* loop if no byte
 
 	BEQ.s		LAB_1359			* loop if null byte
 
+	BTST.b	#FSB_QUIET,fs_flags(a3)
+	BNE.s	.noBlinkStop
 	JSR		BasicNeo_cursor_blink_stop
+.noBlinkStop:
 
 	CMP.b		#$07,d0			* compare with [BELL]
 	BEQ.s		LAB_1378			* branch if [BELL]
@@ -1939,6 +2088,9 @@ LAB_18E3
 * changes no registers
 
 LAB_PRNA
+	BTST.b	#FSB_QUIET,fs_flags(a3)	* suppress all output while a ROM
+	BNE		LAB_PRNA_quiet		* program streams in silently (see FS_OPEN)
+
 	MOVE.l	d1,-(SP)			* save d1
 	CMP.b		#$20,d0			* compare with " "
 	BCS.s		LAB_18F9			* branch if less, non printing character
@@ -1984,6 +2136,9 @@ LAB_1886
 	MOVE.b	d1,TPos(a3)			* clear terminal position
 LAB_188A
 	MOVE.l	(SP)+,d1			* restore d1
+	RTS
+
+LAB_PRNA_quiet
 	RTS
 
 * handle bad input data
@@ -6724,7 +6879,8 @@ TK_BITCLR		EQU TK_BITSET+1		* $A7
 TK_CLS		EQU TK_BITCLR+1		* $A8
 TK_COLOR		EQU TK_CLS+1			* $A9
 TK_LOCATE		EQU TK_COLOR+1		* $AA
-TK_TAB		EQU TK_LOCATE+1		* $AB (note: this shifts all following token
+TK_FILES		EQU TK_LOCATE+1		* list programs stored in the ROM filesystem
+TK_TAB		EQU TK_FILES+1		* $AB (note: this shifts all following token
 								* values up by one; comments below are stale)
 TK_TO			EQU TK_TAB+1		* $A9
 TK_FN			EQU TK_TO+1			* $AA
@@ -7124,6 +7280,7 @@ LAB_CTBL
 	dc.w	LAB_CLS-LAB_CTBL			* CLS
 	dc.w	LAB_COLOR-LAB_CTBL		* COLOR
 	dc.w	LAB_LOCATE-LAB_CTBL		* LOCATE
+	dc.w	LAB_FILES-LAB_CTBL		* FILES
 
 * function pre process routine table
 
@@ -7565,6 +7722,8 @@ LAB_BAER
 	dc.w	LAB_UA-LAB_BAER			* $26 undimensioned array
 	dc.w	LAB_WD-LAB_BAER			* $28 wrong dimensions
 	dc.w	LAB_AD-LAB_BAER			* $2A address
+	dc.w	LAB_FN_ERR-LAB_BAER		* $2C file not found
+	dc.w	LAB_RO-LAB_BAER			* $2E read only
 
 LAB_NF	dc.b	'NEXT without FOR',$00
 LAB_SN	dc.b	'Syntax',$00
@@ -7588,6 +7747,8 @@ LAB_UV	dc.b	'Undefined variable',$00
 LAB_UA	dc.b	'Undimensioned array',$00
 LAB_WD	dc.b	'Wrong dimensions',$00
 LAB_AD	dc.b	'Address',$00
+LAB_FN_ERR	dc.b	'File not found',$00
+LAB_RO	dc.b	'Read only',$00
 
 * keyword table for line (un)crunching
 
@@ -7687,6 +7848,8 @@ KEY_ELSE
 	dc.b	'LSE',TK_ELSE			* ELSE
 	dc.b	$00
 TAB_ASCF
+KEY_FILES
+	dc.b	'ILES',TK_FILES			* FILES
 KEY_FOR
 	dc.b	'OR',TK_FOR				* FOR
 KEY_FN

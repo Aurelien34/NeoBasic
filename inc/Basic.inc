@@ -136,10 +136,11 @@ ccbyte	ds.b	1			* CTRL-C last received byte
 ccnull	ds.b	1			* CTRL-C last received byte 'life' timer
 
 
-* these variables for simulator load/save routines
+* these variables for the ROM filesystem LOAD (see FS_* in Basic.s)
 
-file_byte	ds.b	1			* load/save data byte
-file_id	ds.l	1			* load/save file ID
+fs_flags	ds.b	1			* bit0=loading, bit1=quiet (no echo/cursor), bit2=autorun (chain RUN at EOF)
+fs_ptr	ds.l	1			* current read pointer into ROM program data
+fs_end	ds.l	1			* end address (exclusive) of the data being read
 
 keyboard_polling_index ds.b  1 * keyboard polling index. Incremented by the host everytime a key is pressed
 keyboard_polling_index_dummy ds.b  1

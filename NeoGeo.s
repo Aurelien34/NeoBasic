@@ -19,6 +19,9 @@
 
 	dc.b "EhBASIC NeoGeo"
 
+	; Pointer to the BASIC filesystem allocation table (see FileSystem.gen.s)
+	dc.l FS_TABLE
+
 
 	section	text
 

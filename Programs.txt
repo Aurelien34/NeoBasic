@@ -1,0 +1,16 @@
+# BASIC programs embedded in the ROM filesystem (see MakeFileSystem.ps1).
+# One "NAME = path/to/file.bas" pair per line. Names are case-insensitive at
+# LOAD time, at most 15 characters, letters/digits/underscore only.
+
+BUBBLES     = TestPrograms/Basic/Bubbles.bas
+JOYSTICK    = TestPrograms/Basic/Joystick.bas
+LABY        = TestPrograms/Basic/Laby.bas
+LOCATECOLOR = TestPrograms/Basic/LocateColor.bas
+NIBBLE      = TestPrograms/Basic/Nibble.bas
+SINUS       = TestPrograms/Basic/Sinus.bas
+
+# Program loaded and RUN automatically when the interpreter boots (alias,
+# adds no extra data to the ROM). Accepts an already-declared name above, or
+# its own path. Holding START on pad 1 at reset skips this entirely.
+# Comment the line out to disable auto-run.
+AUTO        = LOCATECOLOR
