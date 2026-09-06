@@ -4,6 +4,8 @@
 
 NeoBASIC is an adaptation of EhBASIC68k for the NeoGeo system.
 
+![alt text](image.png)
+
 ### Core changes
 
 A BASIC needs some input peripherals in order to be usable.
