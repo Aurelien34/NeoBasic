@@ -18,6 +18,16 @@ Added the CLS, COLOR and LOCATE statements.
 Added support for both joysticks, their 4 buttons and both start buttons.
 Added a LOAD instruction backed by a virtual FAT filesystem stored in ROM, along with an autostart feature that lets people without a BricoNeo board program (not easy) and run (easy) BASIC games on their system.
 
+### Usage
+
+The ROM image should be byteswapped and burned to an EPROM that replaces the system ROM (as you would do for a UniBIOS or a diag ROM).
+If you own a BricoNeo board, you just have to drop the ROM in any bank.
+The BricoNeo terminal interface will see the keyboard marker flag in the ROM and activate pass-through keyboard mode. You can then toggle between pass-through and terminal modes using the TAB key.
+Some programs are included in the ROM, see [Programs.txt](Programs.txt).
+You can load programs by typing LOAD "ProgramName", then RUN.
+You can also paste programs in your terminal program (TeraTerm does that really well).
+[Programs.txt](Programs.txt) allows you to select a program that starts automatically at boot time, unless the Start button is pressed.
+
 ### AI usage notice
 
 Changes to the tokenizer needed to support the additional instructions were made using AI.

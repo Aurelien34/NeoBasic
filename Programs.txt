@@ -13,4 +13,4 @@ SINUS       = TestPrograms/Basic/Sinus.bas
 # adds no extra data to the ROM). Accepts an already-declared name above, or
 # its own path. Holding START on pad 1 at reset skips this entirely.
 # Comment the line out to disable auto-run.
-AUTO        = LOCATECOLOR
+#AUTO        = LOCATECOLOR
