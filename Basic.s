@@ -7567,6 +7567,8 @@ LAB_KEYT
 	dc.w	KEY_COLOR-TAB_STAR		* COLOR
 	dc.b	'L',4
 	dc.w	KEY_LOCATE-TAB_STAR		* LOCATE
+	dc.b	'F',3
+	dc.w	KEY_FILES-TAB_STAR		* FILES
 	dc.b	'T',2
 	dc.w	KEY_TAB-TAB_STAR			* TAB(
 
