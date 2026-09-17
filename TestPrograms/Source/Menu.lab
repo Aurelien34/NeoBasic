@@ -1,0 +1,107 @@
+REM Constants
+Fiblen = 24 : REM File info block length
+Auto$ = "AUTO" : REM Autostart file name
+REM Global variables
+Xmenu = 0 : REM Menu title coordinates
+Ymenu = 9
+XStart = 4 : REM Program list coordinates
+YStart = 11
+XCurs = 2 : REM Cursor horizontal position
+AdFS = 0 : REM FileSystem address
+AdFT = 0 : REM File table address
+FCount = 0 : REM File count
+SelIndex = 0 : REM Current program selection
+LpCount = 0 : REM Animation counter
+REM Procedure Parameters
+P1 = 0
+P1$ = ""
+Res = 0
+Res$ = ""
+REM Program start
+GOSUB @LoadFS
+GOSUB @ShowTitle
+GOSUB @ShowPrograms
+@MainLoop:
+    GOSUB @ShowCursor
+    GOSUB @HandleStick
+    GOSUB @HandleButtons
+    LpCount = LpCount + 1
+GOTO @MainLoop
+@LoadFS:
+    REM Read fs address
+    IF PEEK($c0009c) <> 0 OR PEEK($c0009d) <> $c0 THEN GOTO @CheckFs_AddressNotFound
+    AdFS = LEEK($c0009c)
+    REM Check fs header
+    IF PEEK(AdFS) <> ASC("N") OR PEEK(AdFS+1) <> ASC("B") OR PEEK(AdFS+2) <> ASC("F") OR PEEK(AdFS+3) <> ASC("S") THEN GOTO @CheckFs_NoHeader
+    REM Check fs version
+    IF DEEK(AdFS+4) <> 1 THEN  GOTO @CheckFs_WrongVersion
+    REM Load file count
+    FCount = DEEK(AdFS+6)
+    AdFT = AdFS + 8 : REM File table starts here
+    P1 = FCount-1
+    GOSUB @ReadTitle
+    IF Res$ = Auto$ THEN FCount = FCount - 1
+    RETURN
+    @CheckFs_AddressNotFound:
+        PRINT "Filesystem address not found"
+        END
+    @CheckFs_NoHeader:
+        PRINT "Filesystem header not found"
+        END
+    @CheckFs_WrongVersion:
+        PRINT "Filesystem version unknown"
+        END
+@ShowTitle:
+    LOCATE Xmenu,Ymenu
+    PRINT "--- Embedded BASIC programs ---"
+    RETURN
+@ReadTitle:
+    Res$ = ""
+    ladr = AdFT + P1 * Fiblen
+    FOR ltitl = ladr TO ladr + 15
+        IF PEEK(ltitl) <> 0 THEN Res$ = Res$ + CHR$(PEEK(ltitl))
+    NEXT ltitl
+    RETURN
+@ShowPrograms:
+    FOR li = 0 TO FCount-1
+        P1 = li
+        GOSUB @ReadTitle
+        LOCATE XStart , YStart + li
+        PRINT Res$
+    NEXT li
+    RETURN
+@ShowCursor:
+    COLOR  LpCount AND $0f
+    LOCATE XCurs,YStart+SelIndex
+    PRINT ">"
+    RETURN
+@HideCursor:
+    LOCATE XCurs,YStart+SelIndex
+    PRINT " "
+    RETURN
+@HandleStick:
+    lstick = STICK(0)
+    IF lstick = 1 AND SelIndex > 0 THEN GOTO @HandleStick_Up
+    IF lstick = 2 AND SelIndex < FCount-1 THEN GOTO @HandleStick_Down
+    RETURN
+    @HandleStick_Up:
+        GOSUB @HideCursor
+        SelIndex = SelIndex - 1
+        GOTO @HandleStick_Done
+    @HandleStick_Down:
+        GOSUB @HideCursor
+        SelIndex = SelIndex + 1
+        GOTO @HandleStick_Done
+    @HandleStick_Done:
+        GOSUB @ShowCursor
+    @HandleStick_WaitForRelease:
+        IF STICK(0) <> 0 THEN GOTO @HandleStick_WaitForRelease
+        RETURN
+@HandleButtons:
+    IF STRIG(0) = 1 THEN GOTO @HandleButtons_StartProg
+    IF SSTART(0) = 1 THEN GOTO @HandleButtons_StartProg
+    RETURN
+    @HandleButtons_StartProg:
+    P1 = SelIndex
+    GOSUB @ReadTitle
+    LOAD Res$,R

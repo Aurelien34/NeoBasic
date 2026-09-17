@@ -2,6 +2,7 @@
 # One "NAME = path/to/file.bas" pair per line. Names are case-insensitive at
 # LOAD time, at most 15 characters, letters/digits/underscore only.
 
+MENU        = TestPrograms/Basic/Menu.bas
 BUBBLES     = TestPrograms/Basic/Bubbles.bas
 JOYSTICK    = TestPrograms/Basic/Joystick.bas
 LABY        = TestPrograms/Basic/Laby.bas
@@ -13,4 +14,4 @@ SINUS       = TestPrograms/Basic/Sinus.bas
 # adds no extra data to the ROM). Accepts an already-declared name above, or
 # its own path. Holding START on pad 1 at reset skips this entirely.
 # Comment the line out to disable auto-run.
-#AUTO        = LOCATECOLOR
+AUTO        = MENU
