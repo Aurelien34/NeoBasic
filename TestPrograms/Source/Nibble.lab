@@ -59,6 +59,9 @@ FOR I = 1 TO 26
 LOCATE 36,I : PRINT "l";
 NEXT I
 COLOR 15 : LOCATE 0,0 : PRINT "SCORE:";SC;"  ";
+REM previous record, right-aligned on line 0: "BEST: " + 4-char number = 10
+REM chars ending at column 36. HS only changes at game over, so draw it once.
+LOCATE 27,0 : PRINT "BEST: ";RIGHT$("   "+STR$(HS),4);
 
 REM ---- draw initial snake ----
 COLOR 10
